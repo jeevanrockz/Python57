@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""
+Real-time Laptop Performance Monitor
+Displays CPU, Memory, Disk, and Network statistics in real-time
+"""
+
+import psutil
+import os
+import time
+from datetime import datetime
+from typing import Dict
+
+class PerformanceMonitor:
+    def __init__(self, refresh_interval: int = 1):
+        """
+        Initialize the performance monitor.
+        
+        Args:
+            refresh_interval: Update frequency in seconds
+        """
+        self.refresh_interval = refresh_interval
+        self.start_time = time.time()
+        
+    def clear_screen(self):
+        """Clear console screen"""
+        os.system('cls' if os.name == 'nt' else 'clear')
+    
+    def get_cpu_info(self) -> Dict:
+        """Get CPU usage information"""
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        cpu_count = psutil.cpu_count()
+        cpu_freq = psutil.cpu_freq()
+        
+        return {
+            'current': cpu_percent,
+            'count': cpu_count,
+            'frequency': cpu_freq.current if cpu_freq else 0
+        }
+    
+    def get_memory_info(self) -> Dict:
+        """Get memory usage information"""
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        
+        return {
+            'total': memory.total / (1024**3),  # GB
+            'used': memory.used / (1024**3),
+            'available': memory.available / (1024**3),
+            'percent': memory.percent,
+            'swap_total': swap.total / (1024**3),
+            'swap_used': swap.used / (1024**3),
+            'swap_percent': swap.percent
+        }
+    
+    def get_disk_info(self) -> Dict:
+        """Get disk usage information"""
+        disks = {}
+        for partition in psutil.disk_partitions():
+            try:
+                usage = psutil.disk_usage(partition.mountpoint)
+                disks[partition.device] = {
+                    'total': usage.total / (1024**3),  # GB
+                    'used': usage.used / (1024**3),
+                    'free': usage.free / (1024**3),
+                    'percent': usage.percent
+                }
+            except PermissionError:
+                pass
+        
+        return disks
+    
+    def get_network_info(self) -> Dict:
+        """Get network I/O information"""
+        net_io = psutil.net_io_counters()
+        
+        return {
+            'bytes_sent': net_io.bytes_sent / (1024**3),  # GB
+            'bytes_recv': net_io.bytes_recv / (1024**3),
+            'packets_sent': net_io.packets_sent,
+            'packets_recv': net_io.packets_recv,
+            'errors_in': net_io.errin,
+            'errors_out': net_io.errout
+        }
+    
+    def get_process_info(self, top_n: int = 5) -> list:
+        """Get top N processes by CPU usage"""
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+            try:
+                processes.append(proc.info)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        
+        # Sort by CPU usage
+        processes.sort(key=lambda x: x['cpu_percent'], reverse=True)
+        return processes[:top_n]
+    
+    def get_system_info(self) -> Dict:
+        """Get general system information"""
+        boot_time = datetime.fromtimestamp(psutil.boot_time())
+        uptime = datetime.now() - boot_time
+        
+        return {
+            'hostname': psutil.os.getenv('COMPUTERNAME', 'Unknown'),
+            'boot_time': boot_time.strftime("%Y-%m-%d %H:%M:%S"),
+            'uptime_hours': uptime.total_seconds() / 3600
+        }
+    
+    def display_dashboard(self):
+        """Display the performance monitoring dashboard"""
+        self.clear_screen()
+        
+        # Get all information
+        system_info = self.get_system_info()
+        cpu_info = self.get_cpu_info()
+        mem_info = self.get_memory_info()
+        disk_info = self.get_disk_info()
+        net_info = self.get_network_info()
+        processes = self.get_process_info()
+        
+        # Display header
+        print("\n" + "="*80)
+        print(" SYSTEM PERFORMANCE MONITOR ".center(80, "="))
+        print("="*80)
+        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
+              f"Hostname: {system_info['hostname']} | "
+              f"Uptime: {system_info['uptime_hours']:.1f} hours")
+        print("="*80 + "\n")
+        
+        # CPU Information
+        print(f"{'CPU USAGE':.<40} {cpu_info['current']:>6.1f}%")
+        print(f"{'Cores':.<40} {cpu_info['count']}")
+        print(f"{'Frequency':.<40} {cpu_info['frequency']:.0f} MHz\n")
+        
+        # Memory Information
+        print(f"{'MEMORY USAGE':.<40} {mem_info['percent']:>6.1f}%")
+        print(f"{'Used / Total':.<40} {mem_info['used']:.2f} / {mem_info['total']:.2f} GB")
+        print(f"{'Available':.<40} {mem_info['available']:.2f} GB")
+        print(f"{'Swap Usage':.<40} {mem_info['swap_percent']:>6.1f}%")
+        print(f"{'Swap (Used/Total)':.<40} {mem_info['swap_used']:.2f} / {mem_info['swap_total']:.2f} GB\n")
+        
+        # Disk Information
+        print("DISK USAGE:")
+        for disk, usage in disk_info.items():
+            print(f"  {disk:.<35} {usage['percent']:>6.1f}% "
+                  f"({usage['used']:.1f}/{usage['total']:.1f} GB)")
+        print()
+        
+        # Network Information
+        print("NETWORK I/O:")
+        print(f"  {'Bytes Sent':.<33} {net_info['bytes_sent']:.2f} GB")
+        print(f"  {'Bytes Received':.<33} {net_info['bytes_recv']:.2f} GB")
+        print(f"  {'Errors (In/Out)':.<33} {net_info['errors_in']} / {net_info['errors_out']}\n")
+        
+        # Top Processes
+        print("TOP 5 PROCESSES (by CPU):")
+        print(f"  {'PID':<8} {'Name':<25} {'CPU%':<8} {'Memory%':<8}")
+        print("  " + "-"*50)
+        for proc in processes:
+            name = proc['name'][:24]
+            print(f"  {proc['pid']:<8} {name:<25} "
+                  f"{proc['cpu_percent']:<8.1f} {proc['memory_percent']:<8.1f}")
+        
+        print("\n" + "="*80)
+        print("Press Ctrl+C to exit")
+        print("="*80 + "\n")
+    
+    def start(self):
+        """Start the performance monitoring loop"""
+        try:
+            while True:
+                self.display_dashboard()
+                time.sleep(self.refresh_interval)
+        except KeyboardInterrupt:
+            print("\n\nMonitoring stopped. Goodbye!")
+
+def main():
+    """Main entry point"""
+    monitor = PerformanceMonitor(refresh_interval=2)  # Update every 2 seconds
+    monitor.start()
+
+if __name__ == "__main__":
+    main()
