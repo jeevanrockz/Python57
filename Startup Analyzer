@@ -1,0 +1,443 @@
+#!/usr/bin/env python3
+"""
+Startup Program Analyzer - Lists applications that run at startup and flags unnecessary ones
+Analyzes startup locations and provides recommendations
+"""
+
+import os
+import sys
+import json
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Optional
+
+if sys.platform == 'win32':
+    import winreg
+
+
+class StartupProgramAnalyzer:
+    """Analyze and manage startup programs"""
+    
+    # Programs that are generally safe and needed at startup
+    ESSENTIAL_STARTUP_PROGRAMS = {
+        'windows defender', 'antimalware service executable',
+        'nvidia', 'amd radeon', 'intel hd graphics',
+        'realtek', 'qualcomm', 'broadcom',  # Audio/network drivers
+        'microsoft office',
+        'dropbox', 'onedrive', 'google drive',
+        'steam', 'origin', 'uplay',
+        'discord', 'slack', 'teams', 'zoom',
+        'razer', 'corsair', 'logitech',  # Gaming peripherals
+        'synology', 'nas',
+    }
+    
+    # Programs that are typically unnecessary at startup
+    UNNECESSARY_PROGRAMS = {
+        'spotify': {'risk': 'LOW', 'reason': 'Music app, not needed at startup'},
+        'skype': {'risk': 'MEDIUM', 'reason': 'Can disable at startup, launch manually'},
+        'adobe': {'risk': 'MEDIUM', 'reason': 'Several Adobe apps slow down startup'},
+        'creative cloud': {'risk': 'MEDIUM', 'reason': 'Not needed at startup'},
+        'photoshop': {'risk': 'MEDIUM', 'reason': 'Slows down startup'},
+        'acrobat': {'risk': 'MEDIUM', 'reason': 'Reader app, launch when needed'},
+        'java': {'risk': 'MEDIUM', 'reason': 'Update checks not needed at startup'},
+        'printer': {'risk': 'LOW', 'reason': 'Printer utilities not needed at startup'},
+        'scanner': {'risk': 'LOW', 'reason': 'Scanner utilities not needed at startup'},
+        'quicktime': {'risk': 'LOW', 'reason': 'Video player utilities'},
+        'itunes': {'risk': 'MEDIUM', 'reason': 'Music app, not needed at startup'},
+        'nvidia geforce experience': {'risk': 'MEDIUM', 'reason': 'Only needed for updates/screenshots'},
+        'amd radeon settings': {'risk': 'MEDIUM', 'reason': 'GPU app, not critical at startup'},
+        'bitdefender': {'risk': 'MEDIUM', 'reason': 'Some Bitdefender modules can be disabled'},
+        'avg': {'risk': 'MEDIUM', 'reason': 'Antivirus runs, but UI not needed'},
+        'avast': {'risk': 'MEDIUM', 'reason': 'Antivirus runs, but UI not needed'},
+        'mcafee': {'risk': 'HIGH', 'reason': 'Heavy antivirus, slows startup significantly'},
+        'norton': {'risk': 'HIGH', 'reason': 'Heavy antivirus, slows startup significantly'},
+        'google update': {'risk': 'LOW', 'reason': 'Only needed occasionally'},
+        'slack': {'risk': 'MEDIUM', 'reason': 'Can disable, launch manually when needed'},
+        'zoom': {'risk': 'MEDIUM', 'reason': 'Can disable, launch when meeting starts'},
+        'hangouts': {'risk': 'LOW', 'reason': 'Communication app, not needed at startup'},
+        'teamviewer': {'risk': 'MEDIUM', 'reason': 'Only needed if you use remote access'},
+        'anydesk': {'risk': 'MEDIUM', 'reason': 'Only needed if you use remote access'},
+        'chrome': {'risk': 'LOW', 'reason': 'Browser, not needed at startup'},
+        'firefox': {'risk': 'LOW', 'reason': 'Browser, not needed at startup'},
+        'edge': {'risk': 'LOW', 'reason': 'Browser, not needed at startup'},
+        'steam': {'risk': 'MEDIUM', 'reason': 'Gaming platform, launch manually'},
+        'epic games': {'risk': 'MEDIUM', 'reason': 'Gaming platform, not needed'},
+        'origin': {'risk': 'MEDIUM', 'reason': 'Gaming platform, not needed'},
+        'uplay': {'risk': 'MEDIUM', 'reason': 'Gaming platform, not needed'},
+        'battle.net': {'risk': 'MEDIUM', 'reason': 'Gaming platform, not needed'},
+        'discord': {'risk': 'LOW', 'reason': 'Communication, can start manually'},
+        'riot client': {'risk': 'MEDIUM', 'reason': 'Only needed when playing'},
+        'onedrive': {'risk': 'MEDIUM', 'reason': 'Can disable, rarely needed auto-sync'},
+        'dropbox': {'risk': 'MEDIUM', 'reason': 'Can disable auto-start'},
+        'google drive': {'risk': 'MEDIUM', 'reason': 'Sync disabled, launch manually'},
+    }
+    
+    # Potentially harmful startup programs
+    HARMFUL_STARTUP_PROGRAMS = {
+        'toolbar': {'risk': 'HIGH', 'reason': 'Unwanted toolbars slow down startup'},
+        'search bar': {'risk': 'HIGH', 'reason': 'Malicious search extensions'},
+        'conduit': {'risk': 'CRITICAL', 'reason': 'Malware/PUP hijacker'},
+        'babylon': {'risk': 'CRITICAL', 'reason': 'Malware/search hijacker'},
+        'delta': {'risk': 'HIGH', 'reason': 'Malicious toolbar'},
+        'iminent': {'risk': 'HIGH', 'reason': 'Adware'},
+        'delta search': {'risk': 'HIGH', 'reason': 'Search hijacker'},
+        'sweetpacks': {'risk': 'HIGH', 'reason': 'PUP adware'},
+        'opencandy': {'risk': 'HIGH', 'reason': 'Ad injection'},
+        'mysearchdial': {'risk': 'HIGH', 'reason': 'Search hijacker'},
+        'searchprotect': {'risk': 'HIGH', 'reason': 'Malicious program'},
+    }
+    
+    def __init__(self):
+        """Initialize the startup analyzer"""
+        self.startup_programs = []
+        self.unnecessary_programs = []
+        self.harmful_programs = []
+        self.essential_programs = []
+    
+    def get_registry_startup_programs(self) -> List[Dict]:
+        """Get startup programs from Windows registry"""
+        programs = []
+        
+        if sys.platform != 'win32':
+            print("Registry scan only works on Windows")
+            return programs
+        
+        # Registry paths to check
+        registry_paths = [
+            (r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'HKLM'),
+            (r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run', 'HKLM'),
+            (r'SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce', 'HKLM'),
+        ]
+        
+        for reg_path, hive in registry_paths:
+            try:
+                if hive == 'HKLM':
+                    reg_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path)
+                else:
+                    reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path)
+                
+                value_count = winreg.QueryInfoKey(reg_key)[1]
+                
+                for i in range(value_count):
+                    try:
+                        name, value, _ = winreg.EnumValue(reg_key, i)
+                        
+                        programs.append({
+                            'name': name,
+                            'path': value,
+                            'location': f'Registry: {hive}\\{reg_path}',
+                            'type': 'Registry'
+                        })
+                    except WindowsError:
+                        pass
+                
+                winreg.CloseKey(reg_key)
+            
+            except WindowsError:
+                pass
+        
+        return programs
+    
+    def get_startup_folder_programs(self) -> List[Dict]:
+        """Get programs from Windows startup folders"""
+        programs = []
+        
+        startup_paths = [
+            Path(os.environ.get('PROGRAMDATA', 'C:\\ProgramData')) / 'Microsoft\\Windows\\Start Menu\\Programs\\Startup',
+            Path(os.environ.get('APPDATA', '')) / 'Microsoft\\Windows\\Start Menu\\Programs\\Startup'
+        ]
+        
+        for startup_path in startup_paths:
+            if startup_path.exists():
+                try:
+                    for item in startup_path.glob('*'):
+                        if item.is_file():
+                            programs.append({
+                                'name': item.stem,
+                                'path': str(item),
+                                'location': str(startup_path),
+                                'type': 'Startup Folder',
+                                'file_size': item.stat().st_size,
+                                'modified': datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                            })
+                except Exception:
+                    pass
+        
+        return programs
+    
+    def get_scheduled_tasks_startup(self) -> List[Dict]:
+        """Get startup programs from Windows Scheduled Tasks"""
+        programs = []
+        
+        if sys.platform != 'win32':
+            return programs
+        
+        # Common scheduled task startup locations
+        task_paths = [
+            r'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks',
+        ]
+        
+        try:
+            reg_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, task_paths[0])
+            sub_keys = winreg.QueryInfoKey(reg_key)[0]
+            
+            for i in range(sub_keys):
+                try:
+                    sub_key_name = winreg.EnumKey(reg_key, i)
+                    sub_key = winreg.OpenKey(reg_key, sub_key_name)
+                    
+                    try:
+                        path, _ = winreg.QueryValueEx(sub_key, 'Path')
+                        # Only show tasks that look like startup tasks
+                        if 'startup' in path.lower() or 'run' in path.lower():
+                            programs.append({
+                                'name': path,
+                                'path': f'Task: {path}',
+                                'location': 'Scheduled Tasks',
+                                'type': 'Scheduled Task'
+                            })
+                    except WindowsError:
+                        pass
+                    
+                    winreg.CloseKey(sub_key)
+                except WindowsError:
+                    pass
+            
+            winreg.CloseKey(reg_key)
+        except WindowsError:
+            pass
+        
+        return programs
+    
+    def classify_program(self, program_name: str) -> Dict:
+        """Classify a program as essential, unnecessary, or harmful"""
+        name_lower = program_name.lower()
+        
+        # Check if harmful
+        for harmful, info in self.HARMFUL_STARTUP_PROGRAMS.items():
+            if harmful in name_lower:
+                return {'category': 'HARMFUL', **info}
+        
+        # Check if unnecessary
+        for unnecessary, info in self.UNNECESSARY_PROGRAMS.items():
+            if unnecessary in name_lower:
+                return {'category': 'UNNECESSARY', **info}
+        
+        # Check if essential
+        for essential in self.ESSENTIAL_STARTUP_PROGRAMS:
+            if essential in name_lower:
+                return {'category': 'ESSENTIAL', 'reason': 'System or commonly needed program'}
+        
+        # Default to unknown
+        return {'category': 'UNKNOWN', 'reason': 'Unable to classify automatically'}
+    
+    def scan_startup_programs(self):
+        """Scan for all startup programs"""
+        print(f"\n{'='*80}")
+        print(f" STARTUP PROGRAM ANALYZER ".center(80, "="))
+        print(f"{'='*80}\n")
+        
+        print("Scanning startup programs from multiple sources...\n")
+        
+        # Get from registry
+        print("Scanning registry...", end='', flush=True)
+        registry_programs = self.get_registry_startup_programs()
+        print(f" Found {len(registry_programs)}")
+        
+        # Get from startup folders
+        print("Scanning startup folders...", end='', flush=True)
+        folder_programs = self.get_startup_folder_programs()
+        print(f" Found {len(folder_programs)}")
+        
+        # Get from scheduled tasks
+        print("Scanning scheduled tasks...", end='', flush=True)
+        task_programs = self.get_scheduled_tasks_startup()
+        print(f" Found {len(task_programs)}")
+        
+        # Combine and classify
+        self.startup_programs = registry_programs + folder_programs + task_programs
+        
+        for program in self.startup_programs:
+            classification = self.classify_program(program['name'])
+            program['classification'] = classification
+            
+            if classification['category'] == 'HARMFUL':
+                self.harmful_programs.append(program)
+            elif classification['category'] == 'UNNECESSARY':
+                self.unnecessary_programs.append(program)
+            elif classification['category'] == 'ESSENTIAL':
+                self.essential_programs.append(program)
+        
+        print(f"\nTotal startup programs found: {len(self.startup_programs)}\n")
+    
+    def display_results(self):
+        """Display scan results"""
+        print(f"\n{'='*80}")
+        print(f" SCAN RESULTS ".center(80, "="))
+        print(f"{'='*80}\n")
+        
+        print(f"Total Programs: {len(self.startup_programs)}")
+        print(f"Essential Programs: {len(self.essential_programs)}")
+        print(f"Unnecessary Programs: {len(self.unnecessary_programs)}")
+        print(f"Harmful Programs: {len(self.harmful_programs)}\n")
+        
+        # Display harmful programs
+        if self.harmful_programs:
+            self._display_harmful_programs()
+        
+        # Display unnecessary programs
+        if self.unnecessary_programs:
+            self._display_unnecessary_programs()
+        
+        # Display all programs
+        self._display_all_programs()
+    
+    def _display_harmful_programs(self):
+        """Display harmful startup programs"""
+        print("🔴 HARMFUL STARTUP PROGRAMS (Remove Immediately):\n")
+        
+        for idx, prog in enumerate(self.harmful_programs, 1):
+            info = prog['classification']
+            print(f"{idx}. {prog['name']}")
+            print(f"   Risk: {info['risk']}")
+            print(f"   Reason: {info['reason']}")
+            print(f"   Location: {prog['location']}")
+            print()
+    
+    def _display_unnecessary_programs(self):
+        """Display unnecessary startup programs"""
+        print("🟡 UNNECESSARY STARTUP PROGRAMS (Can be Disabled):\n")
+        
+        for idx, prog in enumerate(self.unnecessary_programs, 1):
+            info = prog['classification']
+            print(f"{idx}. {prog['name']}")
+            print(f"   Impact: {info['risk']}")
+            print(f"   Reason: {info['reason']}")
+            print(f"   Location: {prog['location']}")
+            print()
+    
+    def _display_all_programs(self):
+        """Display all programs with classification"""
+        print(f"\n{'='*80}")
+        print(f" ALL STARTUP PROGRAMS ".center(80, "="))
+        print(f"{'='*80}\n")
+        
+        print(f"{'Program Name':<40} {'Category':<15} {'Status':<20}")
+        print("-" * 75)
+        
+        for prog in sorted(self.startup_programs, key=lambda x: x['name']):
+            category = prog['classification']['category']
+            
+            if category == 'HARMFUL':
+                status = "🔴 REMOVE"
+            elif category == 'UNNECESSARY':
+                status = "🟡 CAN DISABLE"
+            elif category == 'ESSENTIAL':
+                status = "🟢 KEEP"
+            else:
+                status = "❓ UNKNOWN"
+            
+            name = prog['name'][:39]
+            print(f"{name:<40} {category:<15} {status:<20}")
+        
+        print("\n" + "="*80 + "\n")
+    
+    def get_optimization_recommendations(self):
+        """Get optimization recommendations"""
+        print(f"\n{'='*80}")
+        print(f" OPTIMIZATION RECOMMENDATIONS ".center(80, "="))
+        print(f"{'='*80}\n")
+        
+        total_unnecessary = len(self.unnecessary_programs)
+        total_harmful = len(self.harmful_programs)
+        
+        if total_harmful > 0:
+            print(f"🔴 CRITICAL: {total_harmful} harmful program(s) found!")
+            print("   Action: Remove these immediately to protect your system\n")
+        
+        if total_unnecessary > 0:
+            print(f"🟡 IMPROVEMENT: Disable {total_unnecessary} unnecessary program(s)")
+            print("   Action: This will improve startup time and free up resources\n")
+        
+        if total_unnecessary == 0 and total_harmful == 0:
+            print("✓ Your startup programs look good!")
+            print("   No harmful or unnecessary programs detected\n")
+        
+        # Startup time impact estimate
+        if total_unnecessary > 0:
+            estimated_improvement = total_unnecessary * 2  # Rough estimate: 2 seconds per program
+            print(f"Estimated startup improvement: ~{estimated_improvement} seconds\n")
+        
+        print("HOW TO DISABLE UNNECESSARY PROGRAMS:")
+        print("  1. Press Win + R")
+        print("  2. Type 'msconfig' and press Enter")
+        print("  3. Go to 'Startup' tab")
+        print("  4. Uncheck programs you want to disable")
+        print("  5. Click 'Apply' and 'OK'")
+        print("  6. Restart your computer\n")
+        
+        print("ALTERNATIVE METHOD - Task Manager:")
+        print("  1. Press Ctrl + Shift + Esc (Task Manager)")
+        print("  2. Click 'Startup' tab")
+        print("  3. Right-click program and select 'Disable'")
+        print("  4. Restart your computer\n")
+        
+        print("="*80 + "\n")
+    
+    def save_report(self, filename: str = 'startup_analysis_report.json'):
+        """Save analysis report to JSON file"""
+        report = {
+            'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'total_programs': len(self.startup_programs),
+            'essential_count': len(self.essential_programs),
+            'unnecessary_count': len(self.unnecessary_programs),
+            'harmful_count': len(self.harmful_programs),
+            'programs': self.startup_programs
+        }
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
+            
+            print(f"\n{'='*80}")
+            print(f"Report saved to: {filename}")
+            print(f"{'='*80}\n")
+        except Exception as e:
+            print(f"Error saving report: {e}")
+
+
+def main():
+    """Main entry point"""
+    analyzer = StartupProgramAnalyzer()
+    
+    print("\nStartup Program Analyzer - Choose option:")
+    print("1. Analyze startup programs")
+    print("2. Show optimization recommendations")
+    print("3. Full analysis and report")
+    print("4. Exit")
+    
+    choice = input("\nEnter your choice (1-4): ").strip()
+    
+    if choice == '1':
+        analyzer.scan_startup_programs()
+        analyzer.display_results()
+    
+    elif choice == '2':
+        analyzer.scan_startup_programs()
+        analyzer.get_optimization_recommendations()
+    
+    elif choice == '3':
+        analyzer.scan_startup_programs()
+        analyzer.display_results()
+        analyzer.get_optimization_recommendations()
+        analyzer.save_report()
+    
+    elif choice == '4':
+        print("Exiting...")
+    
+    else:
+        print("Invalid choice!")
+
+
+if __name__ == "__main__":
+    main()
