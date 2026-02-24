@@ -1,0 +1,428 @@
+#!/usr/bin/env python3
+"""
+Process Resource Tracker - Continuously monitor CPU/memory usage of specific processes
+Alerts when thresholds are exceeded and logs resource usage data
+"""
+
+import os
+import sys
+import json
+import csv
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+import psutil
+
+
+class ProcessResourceTracker:
+    """Monitor and track resource usage of specific processes"""
+    
+    def __init__(self, log_file: str = 'process_logs.csv', alert_log: str = 'process_alerts.json'):
+        """
+        Initialize the process tracker.
+        
+        Args:
+            log_file: CSV file to store historical logs
+            alert_log: JSON file to store alerts
+        """
+        self.log_file = log_file
+        self.alert_log = alert_log
+        self.monitored_processes = {}  # {process_name: {'pid': pid, 'cpu_threshold': %, 'memory_threshold': %}}
+        self.resource_history = []
+        self.alerts = []
+        self.enable_sound_alerts = True
+    
+    def find_processes_by_name(self, process_name: str) -> List[psutil.Process]:
+        """Find all processes matching the given name"""
+        processes = []
+        
+        try:
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    if process_name.lower() in proc.info['name'].lower():
+                        processes.append(psutil.Process(proc.info['pid']))
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except Exception as e:
+            print(f"Error finding processes: {e}")
+        
+        return processes
+    
+    def add_process_to_monitor(self, process_name: str, cpu_threshold: float = 80.0, 
+                              memory_threshold: float = 80.0):
+        """
+        Add a process to monitor.
+        
+        Args:
+            process_name: Name of the process to monitor
+            cpu_threshold: CPU usage threshold percentage
+            memory_threshold: Memory usage threshold percentage
+        """
+        processes = self.find_processes_by_name(process_name)
+        
+        if not processes:
+            print(f"Warning: No processes found matching '{process_name}'")
+            return False
+        
+        for proc in processes:
+            try:
+                proc_name = proc.name()
+                self.monitored_processes[f"{proc_name} (PID: {proc.pid})"] = {
+                    'pid': proc.pid,
+                    'name': proc_name,
+                    'cpu_threshold': cpu_threshold,
+                    'memory_threshold': memory_threshold,
+                    'last_alert': {'cpu': 0, 'memory': 0}
+                }
+                print(f"Added to monitoring: {proc_name} (PID: {proc.pid})")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        
+        return len(processes) > 0
+    
+    def get_process_resources(self, pid: int) -> Optional[Dict]:
+        """Get CPU and memory usage for a specific process"""
+        try:
+            proc = psutil.Process(pid)
+            
+            # Get CPU percent (non-blocking)
+            cpu_percent = proc.cpu_percent(interval=0.1)
+            
+            # Get memory info
+            try:
+                memory_info = proc.memory_info()
+                memory_percent = proc.memory_percent()
+            except:
+                memory_info = None
+                memory_percent = 0
+            
+            return {
+                'pid': pid,
+                'name': proc.name(),
+                'status': proc.status(),
+                'cpu_percent': cpu_percent,
+                'memory_mb': memory_info.rss / (1024 * 1024) if memory_info else 0,
+                'memory_percent': memory_percent,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            return None
+    
+    def check_thresholds(self, process_key: str, resources: Dict) -> List[str]:
+        """Check if process exceeds thresholds and return alerts"""
+        alerts = []
+        proc_config = self.monitored_processes[process_key]
+        
+        # Check CPU threshold
+        if resources['cpu_percent'] > proc_config['cpu_threshold']:
+            if time.time() - proc_config['last_alert']['cpu'] > 60:  # Alert max once per minute
+                alert_msg = (
+                    f"🔴 CPU ALERT: {resources['name']} (PID: {resources['pid']}) "
+                    f"CPU usage: {resources['cpu_percent']:.1f}% "
+                    f"(threshold: {proc_config['cpu_threshold']}%)"
+                )
+                alerts.append(alert_msg)
+                proc_config['last_alert']['cpu'] = time.time()
+        
+        # Check Memory threshold
+        if resources['memory_percent'] > proc_config['memory_threshold']:
+            if time.time() - proc_config['last_alert']['memory'] > 60:  # Alert max once per minute
+                alert_msg = (
+                    f"🔴 MEMORY ALERT: {resources['name']} (PID: {resources['pid']}) "
+                    f"Memory usage: {resources['memory_percent']:.1f}% "
+                    f"({resources['memory_mb']:.1f} MB) "
+                    f"(threshold: {proc_config['memory_threshold']}%)"
+                )
+                alerts.append(alert_msg)
+                proc_config['last_alert']['memory'] = time.time()
+        
+        return alerts
+    
+    def sound_alert(self):
+        """Produce a sound alert (cross-platform)"""
+        if not self.enable_sound_alerts:
+            return
+        
+        if sys.platform == 'win32':
+            try:
+                import winsound
+                winsound.Beep(1000, 500)  # 1000 Hz, 500ms
+            except:
+                pass
+        else:
+            # Unix/Linux
+            print('\a', end='', flush=True)
+    
+    def log_resource_data(self, resources: Dict):
+        """Log resource data to CSV file"""
+        file_exists = os.path.exists(self.log_file)
+        
+        try:
+            with open(self.log_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                
+                if not file_exists:
+                    writer.writerow(['Timestamp', 'Process Name', 'PID', 'CPU %', 'Memory MB', 'Memory %', 'Status'])
+                
+                writer.writerow([
+                    resources['timestamp'],
+                    resources['name'],
+                    resources['pid'],
+                    f"{resources['cpu_percent']:.2f}",
+                    f"{resources['memory_mb']:.2f}",
+                    f"{resources['memory_percent']:.2f}",
+                    resources['status']
+                ])
+        except Exception as e:
+            print(f"Error logging data: {e}")
+    
+    def log_alert(self, alert_msg: str):
+        """Log alert to JSON file"""
+        alert_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': alert_msg
+        }
+        
+        self.alerts.append(alert_entry)
+        
+        try:
+            with open(self.alert_log, 'w') as f:
+                json.dump(self.alerts, f, indent=2)
+        except Exception as e:
+            print(f"Error logging alert: {e}")
+    
+    def display_monitoring_header(self):
+        """Display monitoring header"""
+        print(f"\n{'='*100}")
+        print(f" PROCESS RESOURCE TRACKER ".center(100, "="))
+        print(f"{'='*100}")
+        print(f"Monitoring {len(self.monitored_processes)} process(es)")
+        print(f"{'='*100}\n")
+    
+    def display_process_details(self, process_key: str, resources: Dict):
+        """Display detailed process information"""
+        print(f"\n{'─'*100}")
+        print(f"Process: {resources['name']} (PID: {resources['pid']})")
+        
+        # CPU bar
+        cpu_bar_filled = int(resources['cpu_percent'] / 5)
+        cpu_bar = '█' * cpu_bar_filled + '░' * (20 - cpu_bar_filled)
+        cpu_threshold = self.monitored_processes[process_key]['cpu_threshold']
+        cpu_status = "⚠️ ALERT" if resources['cpu_percent'] > cpu_threshold else "✓ OK"
+        print(f"  CPU: {cpu_bar} {resources['cpu_percent']:>6.1f}% (threshold: {cpu_threshold}%) {cpu_status}")
+        
+        # Memory bar
+        mem_bar_filled = int(resources['memory_percent'] / 5)
+        mem_bar = '█' * mem_bar_filled + '░' * (20 - mem_bar_filled)
+        mem_threshold = self.monitored_processes[process_key]['memory_threshold']
+        mem_status = "⚠️ ALERT" if resources['memory_percent'] > mem_threshold else "✓ OK"
+        print(f"  Memory: {mem_bar} {resources['memory_percent']:>6.1f}% ({resources['memory_mb']:>.1f} MB) "
+              f"(threshold: {mem_threshold}%) {mem_status}")
+        
+        print(f"  Status: {resources['status']}")
+        print(f"  Last Updated: {resources['timestamp']}")
+    
+    def start_monitoring(self, update_interval: int = 2):
+        """
+        Start continuous monitoring of processes.
+        
+        Args:
+            update_interval: Seconds between updates
+        """
+        if not self.monitored_processes:
+            print("Error: No processes to monitor. Add processes first.")
+            return
+        
+        self.display_monitoring_header()
+        print(f"Update interval: {update_interval} seconds")
+        print(f"Logging to: {self.log_file}")
+        print(f"Alerts to: {self.alert_log}")
+        print("Press Ctrl+C to stop\n")
+        
+        try:
+            first_run = True
+            while True:
+                if not first_run:
+                    print(f"\n{'='*100}\n")
+                
+                first_run = False
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                print(f"[{timestamp}] Monitoring active...\n")
+                
+                for process_key in list(self.monitored_processes.keys()):
+                    pid = self.monitored_processes[process_key]['pid']
+                    resources = self.get_process_resources(pid)
+                    
+                    if resources:
+                        self.display_process_details(process_key, resources)
+                        self.log_resource_data(resources)
+                        
+                        # Check thresholds
+                        threshold_alerts = self.check_thresholds(process_key, resources)
+                        if threshold_alerts:
+                            for alert in threshold_alerts:
+                                print(f"\n{alert}\n")
+                                self.log_alert(alert)
+                                self.sound_alert()
+                    else:
+                        print(f"\n⚠️ Process no longer running: {process_key}\n")
+                        self.monitored_processes.pop(process_key, None)
+                
+                time.sleep(update_interval)
+        
+        except KeyboardInterrupt:
+            print("\n\nMonitoring stopped.")
+            self.save_summary()
+    
+    def save_summary(self):
+        """Save monitoring summary"""
+        summary_file = 'monitoring_summary.json'
+        
+        summary = {
+            'end_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'total_alerts': len(self.alerts),
+            'monitored_processes': self.monitored_processes,
+            'log_file': self.log_file,
+            'alert_file': self.alert_log
+        }
+        
+        try:
+            with open(summary_file, 'w') as f:
+                json.dump(summary, f, indent=2)
+            print(f"Summary saved to: {summary_file}")
+        except Exception as e:
+            print(f"Error saving summary: {e}")
+    
+    def display_system_overview(self):
+        """Display system-wide resource overview"""
+        print(f"\n{'='*100}")
+        print(f" SYSTEM OVERVIEW ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        # CPU
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        cpu_count = psutil.cpu_count()
+        cpu_bar_filled = int(cpu_percent / 5)
+        cpu_bar = '█' * cpu_bar_filled + '░' * (20 - cpu_bar_filled)
+        print(f"System CPU:    {cpu_bar} {cpu_percent:>6.1f}% ({cpu_count} cores)")
+        
+        # Memory
+        mem = psutil.virtual_memory()
+        mem_bar_filled = int(mem.percent / 5)
+        mem_bar = '█' * mem_bar_filled + '░' * (20 - mem_bar_filled)
+        print(f"System Memory: {mem_bar} {mem.percent:>6.1f}% ({mem.used / (1024**3):.1f} / {mem.total / (1024**3):.1f} GB)")
+        
+        # Disk
+        disk = psutil.disk_usage('/')
+        disk_bar_filled = int(disk.percent / 5)
+        disk_bar = '█' * disk_bar_filled + '░' * (20 - disk_bar_filled)
+        print(f"System Disk:   {disk_bar} {disk.percent:>6.1f}% ({disk.used / (1024**3):.1f} / {disk.total / (1024**3):.1f} GB)")
+        
+        print("\n" + "="*100 + "\n")
+    
+    def show_all_processes(self):
+        """Show all running processes"""
+        print(f"\n{'='*100}")
+        print(f" ALL RUNNING PROCESSES ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        print(f"{'Process Name':<45} {'PID':<10} {'CPU %':<10} {'Memory MB':<15}")
+        print("-" * 100)
+        
+        try:
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    cpu = proc.cpu_percent(interval=0.01)
+                    memory = proc.memory_info().rss / (1024 * 1024)
+                    processes.append({
+                        'name': proc.info['name'],
+                        'pid': proc.info['pid'],
+                        'cpu': cpu,
+                        'memory': memory
+                    })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            
+            # Sort by CPU usage
+            for proc in sorted(processes, key=lambda x: x['cpu'], reverse=True)[:20]:
+                print(f"{proc['name']:<45} {proc['pid']:<10} {proc['cpu']:<10.1f} {proc['memory']:<15.1f}")
+        
+        except Exception as e:
+            print(f"Error listing processes: {e}")
+        
+        print("\n" + "="*100 + "\n")
+    
+    def show_configuration(self):
+        """Show current monitoring configuration"""
+        print(f"\n{'='*100}")
+        print(f" MONITORING CONFIGURATION ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        print(f"{'Process Name':<45} {'CPU %':<15} {'Memory %':<15}")
+        print("-" * 100)
+        
+        for process_key, config in self.monitored_processes.items():
+            print(f"{process_key:<45} {config['cpu_threshold']:<15.1f} {config['memory_threshold']:<15.1f}")
+        
+        print("\n" + "="*100 + "\n")
+
+
+def main():
+    """Main entry point"""
+    tracker = ProcessResourceTracker()
+    
+    print("\nProcess Resource Tracker - Setup and Monitor\n")
+    print("="*100)
+    
+    while True:
+        print("\nMain Menu:")
+        print("1. Add process to monitor")
+        print("2. View all running processes")
+        print("3. View current configuration")
+        print("4. Start monitoring")
+        print("5. System overview")
+        print("6. Exit")
+        
+        choice = input("\nEnter your choice (1-6): ").strip()
+        
+        if choice == '1':
+            process_name = input("Enter process name (e.g., 'python', 'chrome', 'spotify'): ").strip()
+            
+            cpu_threshold = input("Enter CPU threshold % (default 80): ").strip()
+            cpu_threshold = float(cpu_threshold) if cpu_threshold else 80.0
+            
+            mem_threshold = input("Enter memory threshold % (default 80): ").strip()
+            mem_threshold = float(mem_threshold) if mem_threshold else 80.0
+            
+            tracker.add_process_to_monitor(process_name, cpu_threshold, mem_threshold)
+        
+        elif choice == '2':
+            tracker.show_all_processes()
+        
+        elif choice == '3':
+            tracker.show_configuration()
+        
+        elif choice == '4':
+            if not tracker.monitored_processes:
+                print("\nError: No processes added. Add processes first.")
+            else:
+                update_interval = input("Enter update interval in seconds (default 2): ").strip()
+                update_interval = int(update_interval) if update_interval.isdigit() else 2
+                tracker.start_monitoring(update_interval)
+        
+        elif choice == '5':
+            tracker.display_system_overview()
+        
+        elif choice == '6':
+            print("Exiting...")
+            break
+        
+        else:
+            print("Invalid choice!")
+
+
+if __name__ == "__main__":
+    main()
