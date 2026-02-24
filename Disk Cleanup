@@ -1,0 +1,541 @@
+#!/usr/bin/env python3
+"""
+Disk Cleanup Utility - Identify large files, duplicate files, and unused temporary files
+Provides safe cleanup recommendations with detailed analysis
+"""
+
+import os
+import sys
+import json
+import hashlib
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Set, Tuple
+from collections import defaultdict
+
+
+class DiskCleanupUtility:
+    """Utility for identifying and managing disk space"""
+    
+    # Common temporary file locations and patterns
+    TEMP_LOCATIONS = {
+        'Windows': [
+            'C:\\Windows\\Temp',
+            'C:\\Users\\*\\AppData\\Local\\Temp',
+            'C:\\Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\Recent',
+            'C:\\$Recycle.Bin',
+        ],
+        'Linux': [
+            '/tmp',
+            '/var/tmp',
+            '/var/cache',
+            '~/.cache',
+            '~/.local/share/Trash',
+        ],
+        'macOS': [
+            '/Library/Caches',
+            '/var/tmp',
+            '/var/cache',
+            '~/.cache',
+            '~/.Trash',
+        ]
+    }
+    
+    # Temporary file patterns
+    TEMP_FILE_PATTERNS = {
+        '*.tmp': 'Temporary file',
+        '*.temp': 'Temporary file',
+        '*.bak': 'Backup file',
+        '*.swp': 'Swap/Editor temporary',
+        '*.~ ': 'Backup file',
+        'Thumbs.db': 'Windows thumbnail cache',
+        'desktop.ini': 'Windows system file',
+        '*.log': 'Log file (old)',
+        '.DS_Store': 'macOS system file',
+        '*.cache': 'Cache file',
+        '*.old': 'Old version file',
+        '*.tmp.*': 'Temporary file variant',
+    }
+    
+    # Safe to delete file extensions (temporary/cache)
+    SAFE_EXTENSIONS = {
+        '.tmp', '.temp', '.bak', '.old', '.cache', '.log',
+        '.swp', '.swo', '~', '.DS_Store', '.thumbs.db'
+    }
+    
+    def __init__(self, root_path: str = None):
+        """
+        Initialize the disk cleanup utility.
+        
+        Args:
+            root_path: Root directory to scan (default: user home directory)
+        """
+        self.root_path = Path(root_path) if root_path else Path.home()
+        self.large_files = []
+        self.duplicate_files = {}
+        self.temp_files = []
+        self.total_large_size = 0
+        self.total_duplicate_size = 0
+        self.total_temp_size = 0
+    
+    def get_file_size(self, size_bytes: int) -> str:
+        """Convert bytes to human readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+    
+    def calculate_file_hash(self, filepath: Path, block_size: int = 65536) -> Optional[str]:
+        """Calculate MD5 hash of a file"""
+        try:
+            hasher = hashlib.md5()
+            with open(filepath, 'rb') as f:
+                while True:
+                    block = f.read(block_size)
+                    if not block:
+                        break
+                    hasher.update(block)
+            return hasher.hexdigest()
+        except (IOError, OSError, PermissionError):
+            return None
+    
+    def scan_large_files(self, min_size_mb: int = 100, max_depth: int = 5) -> List[Dict]:
+        """
+        Scan for large files.
+        
+        Args:
+            min_size_mb: Minimum file size in MB to consider
+            max_depth: Maximum directory depth to scan
+        
+        Returns:
+            List of large files with details
+        """
+        min_bytes = min_size_mb * (1024 * 1024)
+        large_files = []
+        
+        print(f"Scanning for files larger than {min_size_mb}MB...", end='', flush=True)
+        
+        try:
+            for root, dirs, files in os.walk(self.root_path):
+                # Limit depth
+                depth = len(Path(root).relative_to(self.root_path).parts)
+                if depth > max_depth:
+                    dirs[:] = []
+                    continue
+                
+                # Skip certain directories
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                
+                for file in files:
+                    try:
+                        filepath = Path(root) / file
+                        size = filepath.stat().st_size
+                        
+                        if size > min_bytes:
+                            stat = filepath.stat()
+                            large_files.append({
+                                'path': str(filepath),
+                                'name': file,
+                                'size': size,
+                                'size_human': self.get_file_size(size),
+                                'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                                'created': datetime.fromtimestamp(stat.st_ctime).strftime('%Y-%m-%d %H:%M:%S'),
+                            })
+                    except (OSError, PermissionError):
+                        pass
+        
+        except PermissionError:
+            pass
+        
+        # Sort by size
+        large_files.sort(key=lambda x: x['size'], reverse=True)
+        self.large_files = large_files
+        self.total_large_size = sum(f['size'] for f in large_files)
+        
+        print(f" Found {len(large_files)}")
+        return large_files
+    
+    def scan_duplicate_files(self, compare_size_only: bool = False, max_depth: int = 5) -> Dict:
+        """
+        Scan for duplicate files.
+        
+        Args:
+            compare_size_only: If True, only compare by size (faster)
+            max_depth: Maximum directory depth to scan
+        
+        Returns:
+            Dictionary of duplicate files
+        """
+        print("Scanning for duplicate files...", end='', flush=True)
+        
+        files_by_size = defaultdict(list)
+        duplicates = defaultdict(list)
+        
+        try:
+            for root, dirs, files in os.walk(self.root_path):
+                # Limit depth
+                depth = len(Path(root).relative_to(self.root_path).parts)
+                if depth > max_depth:
+                    dirs[:] = []
+                    continue
+                
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                
+                for file in files:
+                    try:
+                        filepath = Path(root) / file
+                        size = filepath.stat().st_size
+                        
+                        # Only check files larger than 1MB
+                        if size > 1024 * 1024:
+                            files_by_size[size].append(filepath)
+                    except (OSError, PermissionError):
+                        pass
+        
+        except PermissionError:
+            pass
+        
+        # Find duplicates
+        total_duplicate_count = 0
+        for size, paths in files_by_size.items():
+            if len(paths) > 1:
+                if compare_size_only:
+                    # Just group by size
+                    duplicates[size] = [str(p) for p in paths]
+                    total_duplicate_count += len(paths) - 1
+                else:
+                    # Compare by hash for accuracy
+                    by_hash = defaultdict(list)
+                    for path in paths:
+                        file_hash = self.calculate_file_hash(path)
+                        if file_hash:
+                            by_hash[file_hash].append(str(path))
+                    
+                    for file_hash, dupes in by_hash.items():
+                        if len(dupes) > 1:
+                            duplicates[file_hash] = {
+                                'size': size,
+                                'size_human': self.get_file_size(size),
+                                'files': dupes,
+                                'count': len(dupes),
+                                'savings': self.get_file_size(size * (len(dupes) - 1))
+                            }
+                            total_duplicate_count += len(dupes) - 1
+                            self.total_duplicate_size += size * (len(dupes) - 1)
+        
+        self.duplicate_files = duplicates
+        print(f" Found {total_duplicate_count} duplicate files")
+        return duplicates
+    
+    def scan_temporary_files(self, max_age_days: int = 30, max_depth: int = 5) -> List[Dict]:
+        """
+        Scan for temporary and unused files.
+        
+        Args:
+            max_age_days: Consider files older than this as unused
+            max_depth: Maximum directory depth to scan
+        
+        Returns:
+            List of temporary files
+        """
+        print("Scanning for temporary files...", end='', flush=True)
+        
+        temp_files = []
+        cutoff_date = datetime.now() - timedelta(days=max_age_days)
+        cutoff_timestamp = cutoff_date.timestamp()
+        
+        # Common temp locations
+        temp_paths = [
+            Path.home() / 'AppData' / 'Local' / 'Temp',
+            Path.home() / 'AppData' / 'Local' / 'Cache',
+            Path.home() / '.cache',
+            Path.home() / '.local' / 'share' / 'Trash',
+            Path('/tmp') if Path('/tmp').exists() else None,
+            Path('/var/tmp') if Path('/var/tmp').exists() else None,
+        ]
+        
+        for temp_path in temp_paths:
+            if temp_path is None or not temp_path.exists():
+                continue
+            
+            try:
+                for root, dirs, files in os.walk(temp_path):
+                    depth = len(Path(root).relative_to(temp_path).parts)
+                    if depth > max_depth:
+                        dirs[:] = []
+                        continue
+                    
+                    for file in files:
+                        try:
+                            filepath = Path(root) / file
+                            stat = filepath.stat()
+                            
+                            # Check if file is old
+                            if stat.st_mtime < cutoff_timestamp or stat.st_size < 10 * 1024 * 1024:
+                                temp_files.append({
+                                    'path': str(filepath),
+                                    'name': file,
+                                    'size': stat.st_size,
+                                    'size_human': self.get_file_size(stat.st_size),
+                                    'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d'),
+                                    'age_days': int((datetime.now() - datetime.fromtimestamp(stat.st_mtime)).days),
+                                })
+                                self.total_temp_size += stat.st_size
+                        except (OSError, PermissionError):
+                            pass
+            
+            except (OSError, PermissionError):
+                pass
+        
+        # Sort by size
+        temp_files.sort(key=lambda x: x['size'], reverse=True)
+        self.temp_files = temp_files
+        
+        print(f" Found {len(temp_files)}")
+        return temp_files
+    
+    def display_large_files(self, top_n: int = 20):
+        """Display top large files"""
+        if not self.large_files:
+            print("No large files found.")
+            return
+        
+        print(f"\n{'='*100}")
+        print(f" LARGE FILES (Top {top_n}) ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        print(f"{'File Name':<50} {'Size':<15} {'Modified':<20}")
+        print("-" * 100)
+        
+        for file_info in self.large_files[:top_n]:
+            name = file_info['name'][:49]
+            print(f"{name:<50} {file_info['size_human']:<15} {file_info['modified']:<20}")
+        
+        print(f"\nTotal size of large files: {self.get_file_size(self.total_large_size)}")
+        print("="*100 + "\n")
+    
+    def display_duplicate_files(self):
+        """Display duplicate files"""
+        if not self.duplicate_files:
+            print("No duplicates found.")
+            return
+        
+        print(f"\n{'='*100}")
+        print(f" DUPLICATE FILES ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        count = 0
+        for file_hash, dup_info in self.duplicate_files.items():
+            count += 1
+            if count > 10:  # Limit display
+                print(f"\n... and {len(self.duplicate_files) - 10} more groups")
+                break
+            
+            print(f"Duplicate Group {count}:")
+            print(f"  Size: {dup_info['size_human']}")
+            print(f"  Copies: {dup_info['count']}")
+            print(f"  Potential savings: {dup_info['savings']}")
+            print(f"  Files:")
+            
+            for filepath in dup_info['files'][:5]:
+                print(f"    - {filepath}")
+            
+            if len(dup_info['files']) > 5:
+                print(f"    ... and {len(dup_info['files']) - 5} more")
+            
+            print()
+        
+        print(f"Total duplicate space: {self.get_file_size(self.total_duplicate_size)}")
+        print("="*100 + "\n")
+    
+    def display_temporary_files(self, top_n: int = 20):
+        """Display temporary files"""
+        if not self.temp_files:
+            print("No temporary files found.")
+            return
+        
+        print(f"\n{'='*100}")
+        print(f" TEMPORARY FILES (Top {top_n}) ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        print(f"{'File Name':<50} {'Size':<15} {'Age (days)':<15}")
+        print("-" * 100)
+        
+        for file_info in self.temp_files[:top_n]:
+            name = file_info['name'][:49]
+            print(f"{name:<50} {file_info['size_human']:<15} {file_info['age_days']:<15}")
+        
+        print(f"\nTotal temporary files size: {self.get_file_size(self.total_temp_size)}")
+        print("="*100 + "\n")
+    
+    def display_cleanup_recommendations(self):
+        """Display cleanup recommendations"""
+        print(f"\n{'='*100}")
+        print(f" CLEANUP RECOMMENDATIONS ".center(100, "="))
+        print(f"{'='*100}\n")
+        
+        total_savings = self.total_duplicate_size + self.total_temp_size
+        
+        print("DISK SPACE ANALYSIS:")
+        print(f"  Large files (>100MB): {self.get_file_size(self.total_large_size)}")
+        print(f"  Duplicate files: {self.get_file_size(self.total_duplicate_size)}")
+        print(f"  Temporary files: {self.get_file_size(self.total_temp_size)}")
+        print(f"  Total potential savings: {self.get_file_size(total_savings)}")
+        print()
+        
+        print("RECOMMENDATIONS:")
+        
+        if self.total_temp_size > 0:
+            print(f"\n1. 🔵 DELETE TEMPORARY FILES (Safe)")
+            print(f"   Potential savings: {self.get_file_size(self.total_temp_size)}")
+            print(f"   Files: {len(self.temp_files)}")
+            print(f"   Risk: Very Low - These are cache/temp files")
+            print(f"   Action: Safe to delete immediately")
+        
+        if self.total_duplicate_size > 0:
+            print(f"\n2. 🟡 DELETE DUPLICATE FILES (Recommended)")
+            print(f"   Potential savings: {self.get_file_size(self.total_duplicate_size)}")
+            print(f"   Duplicate groups: {len(self.duplicate_files)}")
+            print(f"   Risk: Medium - Keep one copy of each file")
+            print(f"   Action: Review before deleting")
+        
+        if self.total_large_size > 0:
+            print(f"\n3. 🟠 REVIEW LARGE FILES (Manual Review)")
+            print(f"   Files larger than 100MB: {len(self.large_files)}")
+            print(f"   Risk: High - These may be important")
+            print(f"   Action: Manually review and delete if unnecessary")
+        
+        print("\n" + "="*100 + "\n")
+    
+    def save_report(self, filename: str = 'disk_cleanup_report.json'):
+        """Save cleanup report to JSON file"""
+        report = {
+            'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'scan_location': str(self.root_path),
+            'large_files': {
+                'count': len(self.large_files),
+                'total_size': self.total_large_size,
+                'total_size_human': self.get_file_size(self.total_large_size),
+                'files': self.large_files[:50]  # Top 50
+            },
+            'duplicate_files': {
+                'groups': len(self.duplicate_files),
+                'total_savings': self.total_duplicate_size,
+                'total_savings_human': self.get_file_size(self.total_duplicate_size),
+            },
+            'temporary_files': {
+                'count': len(self.temp_files),
+                'total_size': self.total_temp_size,
+                'total_size_human': self.get_file_size(self.total_temp_size),
+                'files': self.temp_files[:50]  # Top 50
+            },
+            'total_potential_savings': self.total_duplicate_size + self.total_temp_size,
+            'total_potential_savings_human': self.get_file_size(self.total_duplicate_size + self.total_temp_size)
+        }
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
+            
+            print(f"\n{'='*100}")
+            print(f"Report saved to: {filename}")
+            print(f"{'='*100}\n")
+        except Exception as e:
+            print(f"Error saving report: {e}")
+    
+    def cleanup_confirmed(self, files_to_delete: List[str], dry_run: bool = True):
+        """
+        Delete confirmed files.
+        
+        Args:
+            files_to_delete: List of file paths to delete
+            dry_run: If True, show what would be deleted without actually deleting
+        """
+        successful = 0
+        failed = 0
+        total_freed = 0
+        
+        for filepath in files_to_delete:
+            try:
+                file_path = Path(filepath)
+                
+                if dry_run:
+                    size = file_path.stat().st_size
+                    print(f"Would delete: {filepath} ({self.get_file_size(size)})")
+                    total_freed += size
+                else:
+                    size = file_path.stat().st_size
+                    file_path.unlink()
+                    print(f"Deleted: {filepath}")
+                    successful += 1
+                    total_freed += size
+            
+            except (OSError, PermissionError) as e:
+                print(f"Failed to delete {filepath}: {e}")
+                failed += 1
+        
+        print(f"\nResults: {successful} deleted, {failed} failed")
+        print(f"Space freed: {self.get_file_size(total_freed)}")
+
+
+def main():
+    """Main entry point"""
+    cleanup = DiskCleanupUtility()
+    
+    print("\nDisk Cleanup Utility - Choose option:")
+    print("1. Full disk analysis")
+    print("2. Scan for large files only")
+    print("3. Scan for duplicates only")
+    print("4. Scan for temporary files only")
+    print("5. View cleanup recommendations")
+    print("6. Exit")
+    
+    choice = input("\nEnter your choice (1-6): ").strip()
+    
+    if choice == '1':
+        print("\nStarting full disk analysis...")
+        cleanup.scan_large_files(min_size_mb=100, max_depth=5)
+        cleanup.scan_duplicate_files(max_depth=5)
+        cleanup.scan_temporary_files(max_age_days=30, max_depth=5)
+        
+        cleanup.display_large_files(top_n=20)
+        cleanup.display_duplicate_files()
+        cleanup.display_temporary_files(top_n=20)
+        cleanup.display_cleanup_recommendations()
+        cleanup.save_report()
+    
+    elif choice == '2':
+        min_size = input("Enter minimum file size in MB (default 100): ").strip()
+        min_size = int(min_size) if min_size.isdigit() else 100
+        
+        cleanup.scan_large_files(min_size_mb=min_size, max_depth=5)
+        cleanup.display_large_files(top_n=50)
+    
+    elif choice == '3':
+        cleanup.scan_duplicate_files(compare_size_only=False, max_depth=5)
+        cleanup.display_duplicate_files()
+    
+    elif choice == '4':
+        max_age = input("Enter max age in days (default 30): ").strip()
+        max_age = int(max_age) if max_age.isdigit() else 30
+        
+        cleanup.scan_temporary_files(max_age_days=max_age, max_depth=5)
+        cleanup.display_temporary_files(top_n=50)
+    
+    elif choice == '5':
+        print("\nRunning quick analysis...")
+        cleanup.scan_large_files(min_size_mb=100, max_depth=5)
+        cleanup.scan_duplicate_files(max_depth=5)
+        cleanup.scan_temporary_files(max_age_days=30, max_depth=5)
+        cleanup.display_cleanup_recommendations()
+    
+    elif choice == '6':
+        print("Exiting...")
+    
+    else:
+        print("Invalid choice!")
+
+
+if __name__ == "__main__":
+    main()
