@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""
+Enhanced App Scanner - Detects harmful/suspicious applications
+Cross-platform support, dynamic threat database, hash verification, rich output
+"""
+
+import os, sys, json, hashlib, csv, subprocess
+from pathlib import Path
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+
+# Optional: rich output
+from rich.console import Console
+from rich.table import Table
+
+if sys.platform == 'win32':
+    import winreg
+
+class AppScanner:
+    def __init__(self, threat_db='harmful_apps.json'):
+        self.apps_found, self.harmful_apps, self.clean_apps = [], [], []
+        self.HARMFUL_APPS = {}
+        self.load_threat_database(threat_db)
+
+    def load_threat_database(self, filename):
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                self.HARMFUL_APPS = json.load(f)
+
+    def get_file_hash(self, filepath):
+        try:
+            with open(filepath, 'rb') as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except Exception:
+            return None
+
+    def get_windows_apps(self):
+        apps = []
+        if sys.platform != 'win32': return apps
+        registry_paths = [
+            r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+            r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+        ]
+        for registry_path in registry_paths:
+            try:
+                reg_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, registry_path)
+                sub_keys = winreg.QueryInfoKey(reg_key)[0]
+                for i in range(sub_keys):
+                    try:
+                        sub_key_name = winreg.EnumKey(reg_key, i)
+                        sub_key = winreg.OpenKey(reg_key, sub_key_name)
+                        app_name, _ = winreg.QueryValueEx(sub_key, 'DisplayName')
+                        version = winreg.QueryValueEx(sub_key, 'DisplayVersion')[0] if winreg.QueryValueEx(sub_key, 'DisplayVersion') else 'Unknown'
+                        apps.append({'name': app_name, 'version': version, 'install_path': 'Registry'})
+                        winreg.CloseKey(sub_key)
+                    except Exception: pass
+                winreg.CloseKey(reg_key)
+            except Exception: pass
+        return apps
+
+    def get_program_files_apps(self):
+        apps = []
+        paths_to_check = [Path(os.environ.get('ProgramFiles', 'C:\\Program Files')),
+                          Path(os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)'))]
+        for base_path in paths_to_check:
+            if base_path.exists():
+                for folder in base_path.iterdir():
+                    if folder.is_dir() and not folder.name.startswith('.'):
+                        apps.append({'name': folder.name, 'version': 'Unknown', 'install_path': str(folder)})
+        return apps
+
+    def get_linux_apps(self):
+        try:
+            result = subprocess.check_output(['dpkg', '-l']).decode()
+            return [{'name': line.split()[1], 'version': line.split()[2], 'install_path': 'dpkg'} for line in result.splitlines()[5:]]
+        except Exception: return []
+
+    def get_macos_apps(self):
+        try:
+            result = subprocess.check_output(['brew', 'list']).decode()
+            return [{'name': line, 'version': 'Unknown', 'install_path': 'brew'} for line in result.splitlines()]
+        except Exception: return []
+
+    def check_app_safety(self, app_name):
+        app_lower = app_name.lower()
+        for harmful_name, info in self.HARMFUL_APPS.items():
+            if harmful_name in app_lower:
+                return info
+        return None
+
+    def scan_system(self):
+        if sys.platform == 'win32':
+            self.apps_found = self.get_windows_apps() + self.get_program_files_apps()
+        elif sys.platform.startswith('linux'):
+            self.apps_found = self.get_linux_apps()
+        elif sys.platform == 'darwin':
+            self.apps_found = self.get_macos_apps()
+        for app in self.apps_found:
+            threat_info = self.check_app_safety(app['name'])
+            if threat_info:
+                app['threat_info'] = threat_info
+                self.harmful_apps.append(app)
+            else:
+                self.clean_apps.append(app)
+
+    def display_results_rich(self):
+        console = Console()
+        table = Table(title="Application Scan Results")
+        table.add_column("Name", style="cyan")
+        table.add_column("Version", style="green")
+        table.add_column("Risk", style="red")
+        for app in self.apps_found:
+            risk = app.get('threat_info', {}).get('risk', 'Safe')
+            table.add_row(app['name'], app['version'], risk)
+        console.print(table)
+
+    def save_csv_report(self, filename='app_scan_report.csv'):
+        with open(filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Name', 'Version', 'Risk', 'Category', 'Description'])
+            for app in self.apps_found:
+                threat = app.get('threat_info', {})
+                writer.writerow([app['name'], app['version'],
+                                 threat.get('risk', 'Safe'),
+                                 threat.get('category', ''),
+                                 threat.get('description', '')])
+        print(f"CSV report saved to {filename}")
+
+def main():
+    scanner = AppScanner()
+    scanner.scan_system()
+    scanner.display_results_rich()
+    scanner.save_csv_report()
+
+if __name__ == "__main__":
+    main()
