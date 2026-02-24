@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""
+Customer Support Chatbot with Knowledge Base, Order Tracking, and Escalation
+Demonstrates real-world use case: handling support queries, API integration,
+and intelligent escalation to human agents.
+"""
+import re
+import random
+import json
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Tuple
+from enum import Enum
+
+
+class IssueType(Enum):
+    """Classify support issues for routing and escalation."""
+    ORDER_TRACKING = "order_tracking"
+    PASSWORD_RESET = "password_reset"
+    RETURN_POLICY = "return_policy"
+    BILLING = "billing"
+    TECHNICAL = "technical"
+    GENERAL = "general"
+
+
+class OrderStatus(Enum):
+    """Simulated order statuses."""
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    IN_TRANSIT = "in_transit"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+
+class KnowledgeBase:
+    """Simulated knowledge base for common support questions."""
+    
+    def __init__(self):
+        self.kb = {
+            "return_policy": {
+                "question": r"return|refund|exchange",
+                "answer": "We offer a 30-day money-back guarantee on all products. "
+                         "To initiate a return, go to your account > Orders > 'Return Item'. "
+                         "Items must be unused and in original packaging."
+            },
+            "password_reset": {
+                "question": r"password|login|reset|forgot",
+                "answer": "Visit our login page and click 'Forgot Password?'. "
+                         "Enter your email, and we'll send a reset link within 5 minutes. "
+                         "Check your spam folder if you don't see it."
+            },
+            "shipping": {
+                "question": r"shipping|deliver|track|where is my",
+                "answer": "Standard shipping takes 5-7 business days. "
+                         "You'll receive a tracking number via email once your order ships. "
+                         "Express (2-day) and Overnight options are available at checkout."
+            },
+            "payment": {
+                "question": r"payment|charge|credit card|billing",
+                "answer": "We accept all major credit cards, PayPal, and Apple Pay. "
+                         "All transactions are encrypted and PCI-DSS compliant. "
+                         "If you see a duplicate charge, contact support immediately."
+            },
+            "products": {
+                "question": r"product|size|color|available|specs|features",
+                "answer": "Our product pages show detailed specs, customer reviews, and sizing guides. "
+                         "For PDFs or technical datasheets, check the 'Documents' tab. "
+                         "Contact us if you need a format we don't have listed."
+            }
+        }
+    
+    def lookup(self, query: str) -> Optional[str]:
+        """Search knowledge base for matching answer."""
+        query_lower = query.lower()
+        for key, entry in self.kb.items():
+            if re.search(entry["question"], query_lower):
+                return entry["answer"]
+        return None
+
+
+class OrderDatabase:
+    """Simulated order database with mock customer data."""
+    
+    def __init__(self):
+        self.orders = {
+            "ORD-001": {
+                "id": "ORD-001",
+                "customer_email": "john@example.com",
+                "items": ["Wireless Headphones", "USB Cable"],
+                "total": 129.99,
+                "status": OrderStatus.SHIPPED,
+                "order_date": datetime.now() - timedelta(days=3),
+                "shipping_date": datetime.now() - timedelta(days=2),
+                "tracking_number": "1Z999AA10123456784"
+            },
+            "ORD-002": {
+                "id": "ORD-002",
+                "customer_email": "john@example.com",
+                "items": ["Phone Case"],
+                "total": 24.99,
+                "status": OrderStatus.DELIVERED,
+                "order_date": datetime.now() - timedelta(days=10),
+                "delivery_date": datetime.now() - timedelta(days=5),
+                "tracking_number": None
+            },
+            "ORD-003": {
+                "id": "ORD-003",
+                "customer_email": "jane@example.com",
+                "items": ["Laptop Stand"],
+                "total": 79.99,
+                "status": OrderStatus.IN_TRANSIT,
+                "order_date": datetime.now() - timedelta(days=1),
+                "shipping_date": datetime.now(),
+                "tracking_number": "1Z999BB20234567895"
+            }
+        }
+    
+    def get_order(self, order_id: str) -> Optional[Dict]:
+        """Retrieve order details."""
+        return self.orders.get(order_id.upper())
+    
+    def get_customer_orders(self, email: str) -> List[Dict]:
+        """Get all orders for a customer by email."""
+        return [o for o in self.orders.values() if o["customer_email"] == email.lower()]
+
+
+class CustomerSupportChatbot:
+    """
+    Production-grade customer support chatbot with:
+    - Knowledge base lookup
+    - Order tracking via simulated API
+    - Escalation to human agents
+    - Conversation memory
+    - Issue classification
+    """
+    
+    def __init__(self):
+        self.kb = KnowledgeBase()
+        self.orders = OrderDatabase()
+        self.memory = []
+        self.escalation_threshold = 2  # Escalate after 2 unresolved turns
+        self.unresolved_count = 0
+        self.customer_email = None  # Will be captured from conversation
+    
+    def preprocess(self, text: str) -> str:
+        """Normalize input text."""
+        text = text.lower().strip()
+        return text
+    
+    def classify_issue(self, text: str) -> IssueType:
+        """Determine the type of support request."""
+        text_lower = text.lower()
+        
+        if re.search(r"order|track|shipping|where is|deliver", text_lower):
+            return IssueType.ORDER_TRACKING
+        elif re.search(r"password|login|reset|forgot", text_lower):
+            return IssueType.PASSWORD_RESET
+        elif re.search(r"return|refund|exchange", text_lower):
+            return IssueType.RETURN_POLICY
+        elif re.search(r"charge|payment|billing|credit card", text_lower):
+            return IssueType.BILLING
+        elif re.search(r"error|bug|issue|not work", text_lower):
+            return IssueType.TECHNICAL
+        else:
+            return IssueType.GENERAL
+    
+    def extract_order_id(self, text: str) -> Optional[str]:
+        """Extract order ID from user message (format: ORD-XXX)."""
+        match = re.search(r"ORD-\d+", text.upper())
+        return match.group(0) if match else None
+    
+    def extract_email(self, text: str) -> Optional[str]:
+        """Extract email from user message."""
+        match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text.lower())
+        return match.group(0) if match else None
+    
+    def handle_order_tracking(self, text: str) -> str:
+        """Handle 'Where is my order?' type queries."""
+        order_id = self.extract_order_id(text)
+        
+        if not order_id:
+            # Try to get orders by email
+            email = self.extract_email(text) or self.customer_email
+            if not email:
+                return "I'd be happy to help track your order! Could you please provide your order ID (e.g., ORD-001) or email address?"
+            
+            orders = self.orders.get_customer_orders(email)
+            if not orders:
+                return f"I couldn't find any orders for {email}. Please check the email address or provide your order ID."
+            
+            if len(orders) == 1:
+                order = orders[0]
+            else:
+                order_list = ", ".join([f"{o['id']} ({o['status'].value})" for o in orders])
+                return f"Found {len(orders)} orders: {order_list}. Which one would you like to track?"
+        else:
+            order = self.orders.get_order(order_id)
+        
+        if not order:
+            return f"I couldn't find order {order_id}. Please double-check the order ID."
+        
+        # Format order status response
+        status = order["status"].value.replace("_", " ").title()
+        response = f"📦 Order {order_id}:\n"
+        response += f"  Status: {status}\n"
+        response += f"  Items: {', '.join(order['items'])}\n"
+        
+        if order["status"] in [OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT]:
+            response += f"  Tracking: {order['tracking_number']}\n"
+            response += f"  📍 Ship Date: {order['shipping_date'].strftime('%Y-%m-%d')}\n"
+        elif order["status"] == OrderStatus.DELIVERED:
+            response += f"  ✅ Delivered on {order['delivery_date'].strftime('%Y-%m-%d')}\n"
+        else:
+            response += f"  📅 Ordered: {order['order_date'].strftime('%Y-%m-%d')}\n"
+        
+        self.unresolved_count = 0  # Reset on successful resolution
+        return response
+    
+    def handle_password_reset(self, text: str) -> str:
+        """Handle password reset requests."""
+        email = self.extract_email(text)
+        if email:
+            self.customer_email = email
+            return (f"I've initiated a password reset for {email}. "
+                   f"Check your inbox (and spam folder) for an email with a reset link. "
+                   f"The link expires in 24 hours.")
+        else:
+            return "To reset your password, please provide your email address and I'll send you a reset link."
+    
+    def respond(self, text: str) -> str:
+        """Main chatbot response logic with routing and escalation."""
+        clean = self.preprocess(text)
+        
+        # Greeting & goodbyes
+        if re.search(r"^(hi|hello|hey|good morning|good afternoon)", clean):
+            return "👋 Hello! Welcome to Customer Support. How can I help you today?"
+        
+        if re.search(r"(bye|goodbye|exit|quit|thanks|thank you)", clean):
+            return "Thank you for contacting us! If you need further assistance, feel free to reach out."
+        
+        # Classify and route
+        issue_type = self.classify_issue(text)
+        
+        if issue_type == IssueType.ORDER_TRACKING:
+            return self.handle_order_tracking(text)
+        elif issue_type == IssueType.PASSWORD_RESET:
+            return self.handle_password_reset(text)
+        else:
+            # Try knowledge base lookup
+            kb_answer = self.kb.lookup(text)
+            if kb_answer:
+                self.unresolved_count = 0
+                return kb_answer
+        
+        # Couldn't resolve — increment and possibly escalate
+        self.unresolved_count += 1
+        
+        if self.unresolved_count >= self.escalation_threshold:
+            return self._escalate_to_human()
+        
+        generic_responses = [
+            "I'm not quite sure about that. Could you rephrase or provide more details?",
+            "That's a good question. Let me escalate this to our support team if needed.",
+            "I'm still learning — can you tell me more about what you're trying to do?"
+        ]
+        return random.choice(generic_responses)
+    
+    def _escalate_to_human(self) -> str:
+        """Escalate unresolved issue to human agent."""
+        self.unresolved_count = 0  # Reset counter
+        ticket_id = f"TICKET-{random.randint(10000, 99999)}"
+        return (
+            f"🔄 I'm connecting you with a human agent now.\n"
+            f"Ticket ID: {ticket_id}\n"
+            f"An agent will respond within 2-5 minutes. "
+            f"Please keep this ticket ID for reference."
+        )
+    
+    def chat(self):
+        """Interactive chat loop."""
+        print("\n" + "="*60)
+        print("  CUSTOMER SUPPORT CHATBOT")
+        print("="*60)
+        print("Type 'exit' or 'quit' to leave\n")
+        
+        while True:
+            try:
+                user_input = input("You: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\n🤖 Bot: Thank you for contacting us. Goodbye!")
+                break
+            
+            if not user_input:
+                continue
+            
+            if user_input.lower() in ("exit", "quit"):
+                print("🤖 Bot: Thank you for contacting us. Goodbye!")
+                break
+            
+            # Store in memory
+            self.memory.append(("user", user_input))
+            
+            # Generate response
+            response = self.respond(user_input)
+            self.memory.append(("bot", response))
+            
+            print(f"🤖 Bot: {response}\n")
+
+
+def main():
+    """Entry point."""
+    import sys
+    
+    bot = CustomerSupportChatbot()
+    
+    if len(sys.argv) > 1:
+        # Single query mode (for testing)
+        query = " ".join(sys.argv[1:])
+        print(f"You: {query}")
+        print(f"🤖 Bot: {bot.respond(query)}")
+    else:
+        # Interactive mode
+        bot.chat()
+
+
+if __name__ == "__main__":
+    main()
