@@ -1,0 +1,264 @@
+"""
+Clipboard Manager - Save and retrieve clipboard history locally
+Main application module (MySQL version)
+"""
+
+import pyperclip
+import mysql.connector
+from mysql.connector import Error as MySQLError
+import json
+import time
+import hashlib
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Optional
+import os
+import sys
+
+class ClipboardManager:
+    """Manages clipboard history with MySQL database storage."""
+
+    def __init__(self, host="localhost", user="", password="", database="clipboard_db"):
+        """
+        Initialize the Clipboard Manager.
+
+        Args:
+            host: MySQL server host
+            user: MySQL username
+            password: MySQL password
+            database: MySQL database name
+        """
+        self.host = host
+        self.user = user
+        self.password = password
+        self.database = database
+        self.init_database()
+        self.last_clipboard_content = ""
+
+    def get_connection(self):
+        """Create a new MySQL connection."""
+        return mysql.connector.connect(
+            host=self.host,
+            user=self.user,
+            password=self.password,
+            database=self.database
+        )
+
+    def init_database(self):
+        """Initialize MySQL database and table if they don't exist."""
+        conn = mysql.connector.connect(
+            host=self.host,
+            user=self.user,
+            password=self.password
+        )
+        cursor = conn.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.database}")
+        conn.commit()
+        conn.close()
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clipboard_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                content TEXT NOT NULL,
+                content_hash VARCHAR(64) UNIQUE NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                accessed_count INT DEFAULT 0,
+                last_accessed TIMESTAMP NULL,
+                length INT,
+                content_type VARCHAR(20) DEFAULT 'text'
+            )
+        ''')
+        # MySQL does not support IF NOT EXISTS for CREATE INDEX, so create indexes
+        # and ignore errors when they already exist.
+        try:
+            cursor.execute('CREATE INDEX idx_timestamp ON clipboard_history(`timestamp`)')
+        except MySQLError:
+            pass
+
+        try:
+            cursor.execute('CREATE INDEX idx_content_hash ON clipboard_history(content_hash)')
+        except MySQLError:
+            pass
+        conn.commit()
+        conn.close()
+
+    def _generate_hash(self, content: str) -> str:
+        """Generate SHA256 hash of content."""
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def save_to_clipboard_history(self, content: str) -> bool:
+        """Save clipboard content to history if it's new."""
+        if not content or not content.strip():
+            return False
+
+        content_hash = self._generate_hash(content)
+        content_length = len(content)
+
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute("SELECT id FROM clipboard_history WHERE content_hash = %s", (content_hash,))
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute("""
+                    UPDATE clipboard_history
+                    SET accessed_count = accessed_count + 1,
+                        last_accessed = CURRENT_TIMESTAMP
+                    WHERE content_hash = %s
+                """, (content_hash,))
+                conn.commit()
+                conn.close()
+                return False
+
+            cursor.execute("""
+                INSERT INTO clipboard_history (content, content_hash, length, content_type)
+                VALUES (%s, %s, %s, %s)
+            """, (content, content_hash, content_length, 'text'))
+
+            conn.commit()
+            conn.close()
+            return True
+
+        except Exception as e:
+            print(f"Error saving to clipboard history: {e}")
+            return False
+
+    def get_history(self, limit: int = 20, offset: int = 0) -> List[Dict]:
+        """Get clipboard history."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT id, content, timestamp, accessed_count, length
+                FROM clipboard_history
+                ORDER BY timestamp DESC
+                LIMIT %s OFFSET %s
+            """, (limit, offset))
+            rows = cursor.fetchall()
+            conn.close()
+            return rows
+        except Exception as e:
+            print(f"Error retrieving history: {e}")
+            return []
+
+    def search_history(self, query: str, limit: int = 20) -> List[Dict]:
+        """Search clipboard history."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(dictionary=True)
+            search_pattern = f"%{query}%"
+            cursor.execute("""
+                SELECT id, content, timestamp, accessed_count, length
+                FROM clipboard_history
+                WHERE content LIKE %s
+                ORDER BY timestamp DESC
+                LIMIT %s
+            """, (search_pattern, limit))
+            rows = cursor.fetchall()
+            conn.close()
+            return rows
+        except Exception as e:
+            print(f"Error searching history: {e}")
+            return []
+
+    def restore_from_history(self, item_id: int) -> bool:
+        """Restore clipboard content from history."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT content FROM clipboard_history WHERE id = %s", (item_id,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return False
+
+            content = row['content']
+            pyperclip.copy(content)
+
+            cursor.execute("""
+                UPDATE clipboard_history
+                SET accessed_count = accessed_count + 1,
+                    last_accessed = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (item_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error restoring from history: {e}")
+            return False
+
+    def delete_history_item(self, item_id: int) -> bool:
+        """Delete an item from clipboard history."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM clipboard_history WHERE id = %s", (item_id,))
+            conn.commit()
+            deleted = cursor.rowcount > 0
+            conn.close()
+            return deleted
+        except Exception as e:
+            print(f"Error deleting history item: {e}")
+            return False
+
+    def clear_history(self) -> bool:
+        """Clear all clipboard history."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM clipboard_history")
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error clearing history: {e}")
+            return False
+
+    def get_statistics(self) -> Dict:
+        """Get clipboard history statistics."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM clipboard_history")
+            total_items = cursor.fetchone()[0]
+            cursor.execute("SELECT SUM(length) FROM clipboard_history")
+            total_size = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT MAX(accessed_count) FROM clipboard_history")
+            max_access = cursor.fetchone()[0] or 0
+            conn.close()
+            return {
+                'total_items': total_items,
+                'total_size_bytes': total_size,
+                'max_access_count': max_access
+            }
+        except Exception as e:
+            print(f"Error getting statistics: {e}")
+            return {}
+
+    def monitor_clipboard(self, interval: int = 1):
+        """Monitor clipboard for changes and save to history."""
+        print("Clipboard Monitor started. Press Ctrl+C to stop...")
+        print(f"Checking clipboard every {interval} second(s)")
+        try:
+            while True:
+                try:
+                    current_content = pyperclip.paste()
+                    if current_content != self.last_clipboard_content:
+                        if self.save_to_clipboard_history(current_content):
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Saved to history: {current_content[:50]}...")
+                        self.last_clipboard_content = current_content
+                    time.sleep(interval)
+                except pyperclip.PyperclipException as e:
+                    print(f"Clipboard access error: {e}")
+                    time.sleep(interval)
+        except KeyboardInterrupt:
+            print("\nClipboard Monitor stopped.")
+
+if __name__ == "__main__":
+    cm = ClipboardManager(user="", password="", database="clipboard_db")
+    cm.monitor_clipboard(interval=2)
