@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""
+Simple rule-based CLI chatbot.
+Run: python chatbot.py
+"""
+import re
+import random
+import sys
+
+class SimpleChatbot:
+    def __init__(self):
+        self.memory = []
+        # List of (pattern, responses)
+        self.patterns = [
+            (r'hi|hello|hey', ["Hello! How can I help you today?", "Hi there! What would you like to talk about?"]),
+            (r'how are you', ["I'm a bot, but I'm doing fine — thanks!", "Running smoothly. How about you?"]),
+            (r'what is your name|who are you', ["I'm a simple chatbot.", "You can call me Chatbot."]),
+            (r'help|support', ["I can answer simple questions or chat. Try asking something else."]),
+            (r'time|date', ["I don't have access to real time in this demo.", "I can't tell the time here, try your system clock."]),
+            (r'thank you|thanks', ["You're welcome!", "No problem — glad to help."]),
+            (r'bye|goodbye|see you', ["Goodbye — have a great day!", "See you later!"]),
+            (r'(?:i like|i love) (.+)', ["Nice! I also like {0} (in a manner of speaking).", "{0} sounds interesting — tell me more!"]),
+        ]
+        self.fallbacks = [
+            "Tell me more.",
+            "Why do you say that?",
+            "Interesting — can you elaborate?",
+            "I don't have a good answer for that yet."
+        ]
+
+    def preprocess(self, text: str) -> str:
+        text = text.lower().strip()
+        text = re.sub(r"[^a-z0-9\s']+", '', text)
+        return text
+
+    def respond(self, text: str) -> str:
+        clean = self.preprocess(text)
+        for pattern, responses in self.patterns:
+            m = re.search(pattern, clean)
+            if m:
+                resp = random.choice(responses)
+                # If pattern captured groups, format response
+                if m.groups():
+                    try:
+                        return resp.format(*[g for g in m.groups()])
+                    except Exception:
+                        return resp
+                return resp
+        return random.choice(self.fallbacks)
+
+    def chat(self):
+        print("Simple Chatbot. Type 'exit' or 'quit' to leave.")
+        while True:
+            try:
+                user = input('You: ').strip()
+            except (EOFError, KeyboardInterrupt):
+                print('\nGoodbye!')
+                break
+            if not user:
+                continue
+            if user.lower() in ('exit', 'quit'):
+                print('Bot: Goodbye!')
+                break
+            self.memory.append(('user', user))
+            bot_reply = self.respond(user)
+            self.memory.append(('bot', bot_reply))
+            print('Bot:', bot_reply)
+
+
+def main(argv):
+    bot = SimpleChatbot()
+    if len(argv) > 1:
+        # Single-query mode
+        query = ' '.join(argv[1:])
+        print(bot.respond(query))
+    else:
+        bot.chat()
+
+
+if __name__ == '__main__':
+    main(sys.argv)
