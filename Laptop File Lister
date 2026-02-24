@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""
+File Lister - Lists all files on the system
+Displays file information including size, type, and modification date
+"""
+
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+from typing import List, Tuple, Optional
+import json
+
+class FileLister:
+    def __init__(self, show_hidden: bool = False, output_format: str = 'console'):
+        """
+        Initialize the file lister.
+        
+        Args:
+            show_hidden: Whether to show hidden files
+            output_format: 'console' or 'json'
+        """
+        self.show_hidden = show_hidden
+        self.output_format = output_format
+        self.files_found = []
+        self.total_size = 0
+        self.file_count = 0
+    
+    def get_file_size(self, size_bytes: int) -> str:
+        """Convert bytes to human readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+    
+    def get_file_extension(self, filepath: str) -> str:
+        """Get file extension"""
+        return os.path.splitext(filepath)[1] if os.path.splitext(filepath)[1] else 'No extension'
+    
+    def scan_directory(self, path: str, max_depth: Optional[int] = None, current_depth: int = 0):
+        """
+        Recursively scan directory for files.
+        
+        Args:
+            path: Directory path to scan
+            max_depth: Maximum recursion depth (None = unlimited)
+            current_depth: Current recursion depth
+        """
+        # Check depth limit
+        if max_depth is not None and current_depth >= max_depth:
+            return
+        
+        try:
+            for entry in os.scandir(path):
+                try:
+                    # Skip hidden files if not showing them
+                    if not self.show_hidden and entry.name.startswith('.'):
+                        continue
+                    
+                    if entry.is_file(follow_symlinks=False):
+                        try:
+                            stat = entry.stat()
+                            file_info = {
+                                'path': entry.path,
+                                'name': entry.name,
+                                'size': stat.st_size,
+                                'size_human': self.get_file_size(stat.st_size),
+                                'extension': self.get_file_extension(entry.name),
+                                'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                            self.files_found.append(file_info)
+                            self.total_size += stat.st_size
+                            self.file_count += 1
+                        except (OSError, ValueError):
+                            pass
+                    
+                    elif entry.is_dir(follow_symlinks=False):
+                        self.scan_directory(entry.path, max_depth, current_depth + 1)
+                
+                except (PermissionError, OSError):
+                    pass
+        
+        except PermissionError:
+            pass
+    
+    def list_drives(self) -> List[str]:
+        """Get all available drives on Windows"""
+        drives = []
+        if sys.platform == 'win32':
+            import ctypes
+            bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+            for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                if bitmask & 1:
+                    drives.append(f"{letter}:\\")
+                bitmask >>= 1
+        else:
+            drives = ['/']
+        return drives
+    
+    def scan_system(self, max_depth: int = 10):
+        """
+        Scan entire system for files.
+        
+        Args:
+            max_depth: Maximum directory depth to scan
+        """
+        drives = self.list_drives()
+        
+        print(f"\n{'='*80}")
+        print(f" SYSTEM FILE SCANNER ".center(80, "="))
+        print(f"{'='*80}\n")
+        print(f"Found drives: {', '.join(drives)}")
+        print(f"Scanning with max depth: {max_depth}")
+        print(f"Showing hidden files: {self.show_hidden}\n")
+        
+        for drive in drives:
+            print(f"Scanning {drive}... ", end='', flush=True)
+            try:
+                if os.path.exists(drive):
+                    self.scan_directory(drive, max_depth=max_depth)
+                    print("Done")
+            except PermissionError:
+                print("Access Denied")
+    
+    def scan_user_directory(self, max_depth: int = 5):
+        """Scan user's home directory"""
+        home = str(Path.home())
+        print(f"\n{'='*80}")
+        print(f" USER DIRECTORY FILE SCANNER ".center(80, "="))
+        print(f"{'='*80}\n")
+        print(f"Scanning: {home}")
+        print(f"Max depth: {max_depth}\n")
+        
+        self.scan_directory(home, max_depth=max_depth)
+    
+    def scan_specific_path(self, path: str, max_depth: int = 5):
+        """Scan a specific directory path"""
+        if not os.path.exists(path):
+            print(f"Error: Path does not exist: {path}")
+            return
+        
+        print(f"\n{'='*80}")
+        print(f" FILE SCANNER ".center(80, "="))
+        print(f"{'='*80}\n")
+        print(f"Scanning: {path}")
+        print(f"Max depth: {max_depth}\n")
+        
+        self.scan_directory(path, max_depth=max_depth)
+    
+    def display_results(self):
+        """Display the scanning results"""
+        if not self.files_found:
+            print("No files found.")
+            return
+        
+        if self.output_format == 'json':
+            self.save_json_results()
+        else:
+            self.display_console_results()
+    
+    def display_console_results(self):
+        """Display results in console format"""
+        print(f"\n{'='*80}")
+        print(f" RESULTS ".center(80, "="))
+        print(f"{'='*80}\n")
+        
+        print(f"{'File Name':<40} {'Size':<15} {'Type':<15} {'Modified':<20}")
+        print("-" * 90)
+        
+        for file_info in sorted(self.files_found, key=lambda x: x['name']):
+            print(f"{file_info['name']:<40} {file_info['size_human']:<15} "
+                  f"{file_info['extension']:<15} {file_info['modified']:<20}")
+        
+        print("\n" + "="*80)
+        print(f"Total Files: {self.file_count}")
+        print(f"Total Size: {self.get_file_size(self.total_size)}")
+        print("="*80 + "\n")
+    
+    def save_json_results(self):
+        """Save results to JSON file"""
+        output_file = 'file_list.json'
+        
+        summary = {
+            'total_files': self.file_count,
+            'total_size_bytes': self.total_size,
+            'total_size_human': self.get_file_size(self.total_size),
+            'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'files': self.files_found
+        }
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False)
+        
+        print(f"\n{'='*80}")
+        print(f"Results saved to: {output_file}")
+        print(f"Total Files: {self.file_count}")
+        print(f"Total Size: {self.get_file_size(self.total_size)}")
+        print("="*80 + "\n")
+    
+    def get_file_type_stats(self):
+        """Get statistics by file type"""
+        stats = {}
+        
+        for file_info in self.files_found:
+            ext = file_info['extension']
+            if ext not in stats:
+                stats[ext] = {'count': 0, 'total_size': 0}
+            stats[ext]['count'] += 1
+            stats[ext]['total_size'] += file_info['size']
+        
+        return stats
+    
+    def display_statistics(self):
+        """Display file type statistics"""
+        stats = self.get_file_type_stats()
+        
+        print(f"\n{'='*80}")
+        print(f" FILE TYPE STATISTICS ".center(80, "="))
+        print(f"{'='*80}\n")
+        
+        print(f"{'File Type':<20} {'Count':<15} {'Total Size':<20}")
+        print("-" * 55)
+        
+        for ext, data in sorted(stats.items(), key=lambda x: x[1]['count'], reverse=True):
+            print(f"{ext:<20} {data['count']:<15} {self.get_file_size(data['total_size']):<20}")
+        
+        print("\n" + "="*80 + "\n")
+
+
+def main():
+    """Main entry point"""
+    print("\nFile Lister - Choose scan option:")
+    print("1. Scan user directory")
+    print("2. Scan entire system")
+    print("3. Scan specific path")
+    print("4. Exit")
+    
+    choice = input("\nEnter your choice (1-4): ").strip()
+    
+    if choice == '1':
+        max_depth = input("Enter max directory depth (default 5): ").strip()
+        max_depth = int(max_depth) if max_depth.isdigit() else 5
+        
+        lister = FileLister(show_hidden=False, output_format='console')
+        lister.scan_user_directory(max_depth=max_depth)
+        lister.display_results()
+        lister.display_statistics()
+    
+    elif choice == '2':
+        max_depth = input("Enter max directory depth (default 3, system scan): ").strip()
+        max_depth = int(max_depth) if max_depth.isdigit() else 3
+        
+        confirm = input(f"\nWarning: This will scan the entire system (depth {max_depth}). Continue? (y/n): ").strip().lower()
+        if confirm == 'y':
+            lister = FileLister(show_hidden=False, output_format='json')
+            lister.scan_system(max_depth=max_depth)
+            lister.display_results()
+            lister.display_statistics()
+        else:
+            print("Scan cancelled.")
+    
+    elif choice == '3':
+        path = input("Enter directory path to scan: ").strip()
+        max_depth = input("Enter max directory depth (default 5): ").strip()
+        max_depth = int(max_depth) if max_depth.isdigit() else 5
+        
+        lister = FileLister(show_hidden=False, output_format='console')
+        lister.scan_specific_path(path, max_depth=max_depth)
+        lister.display_results()
+        lister.display_statistics()
+    
+    elif choice == '4':
+        print("Exiting...")
+    
+    else:
+        print("Invalid choice!")
+
+
+if __name__ == "__main__":
+    main()
