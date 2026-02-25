@@ -1,0 +1,85 @@
+apps.py:-
+from flask import Flask, render_template
+import csv
+
+app = Flask(__name__)
+
+def read_csv(filename):
+    data = []
+    with open(filename, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(row)
+    return data
+
+@app.route("/")
+def index():
+    data = read_csv(r"C:\Users\jeeva\OneDrive\Desktop\Emissions.csv")  # Replace with your file path
+
+    # Preprocess safely
+    countries = [row.get("Country", "") for row in data]
+    emissions_1997 = []
+    for row in data:
+        try:
+            emissions_1997.append(float(row.get("1997", 0)))
+        except ValueError:
+            emissions_1997.append(0)
+
+    return render_template("dashboard.html",
+                           countries=countries,
+                           emissions=emissions_1997)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+html:-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flask Data Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>CO2 Emissions Dashboard</h1>
+    <canvas id="chart"></canvas>
+    <script>
+        const ctx = document.getElementById('chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ countries|tojson }},
+                datasets: [{
+                    label: 'Emissions (1997)',
+                    data: {{ emissions|tojson }},
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'CO2 Emissions by Country (1997)'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Emissions'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Countries'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
