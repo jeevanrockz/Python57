@@ -1,0 +1,87 @@
+apps.py:-
+import os
+from flask import Flask, render_template
+from collections import Counter
+
+app = Flask(__name__)
+
+# Folder to scan (you can change this to any directory)
+SCAN_FOLDER = "C:/Users/jeeva/OneDrive/Documents"
+
+# File type categories
+FILE_TYPES = {
+    "Images": [".jpg", ".jpeg", ".png", ".gif", ".bmp"],
+    "Documents": [".pdf", ".docx", ".doc", ".txt"],
+    "Spreadsheets": [".xls", ".xlsx", ".csv"],
+    "Audio": [".mp3", ".wav", ".aac"],
+    "Videos": [".mp4", ".avi", ".mov", ".mkv"],
+    "Others": []
+}
+
+def categorize_files(folder):
+    counts = Counter()
+    for root, _, files in os.walk(folder):
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+            found = False
+            for category, extensions in FILE_TYPES.items():
+                if ext in extensions:
+                    counts[category] += 1
+                    found = True
+                    break
+            if not found:
+                counts["Others"] += 1
+    return counts
+
+@app.route("/")
+def index():
+    file_counts = categorize_files(SCAN_FOLDER)
+    categories = list(file_counts.keys())
+    values = list(file_counts.values())
+    return render_template("pie.html", categories=categories, values=values)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+html:-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Local Files Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Local File Distribution</h1>
+    <canvas id="pieChart" width="400" height="400"></canvas>
+    <script>
+        const ctx = document.getElementById('pieChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: {{ categories|tojson }},
+                datasets: [{
+                    label: 'File Types',
+                    data: {{ values|tojson }},
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(255, 206, 86, 0.6)',
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(153, 102, 255, 0.6)',
+                        'rgba(255, 159, 64, 0.6)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Distribution of Local Files by Type'
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
