@@ -73,3 +73,73 @@ if __name__ == "__main__":
     app.run(debug=True)
 
 html:-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inventory Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Inventory Management Dashboard</h1>
+
+    <form action="/add" method="post">
+        <input type="text" name="name" placeholder="Product Name" required>
+        <input type="text" name="category" placeholder="Category" required>
+        <input type="number" name="stock" placeholder="Stock" required>
+        <input type="number" name="sales" placeholder="Sales" required>
+        <input type="date" name="date" required>
+        <button type="submit">Add Product</button>
+    </form>
+
+    <h2>Products by Category</h2>
+    <canvas id="pieChart"></canvas>
+
+    <h2>Stock Levels</h2>
+    <canvas id="barChart"></canvas>
+
+    <h2>Sales Trend</h2>
+    <canvas id="lineChart"></canvas>
+
+    <script>
+        // Pie Chart
+        new Chart(document.getElementById('pieChart'), {
+            type: 'pie',
+            data: {
+                labels: {{ categories|tojson }},
+                datasets: [{
+                    data: {{ category_counts|tojson }},
+                    backgroundColor: ['#ff6384','#36a2eb','#ffce56','#4bc0c0','#9966ff']
+                }]
+            }
+        });
+
+        // Bar Chart
+        new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ product_names|tojson }},
+                datasets: [{
+                    label: 'Stock Levels',
+                    data: {{ stock_values|tojson }},
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                }]
+            }
+        });
+
+        // Line Chart
+        new Chart(document.getElementById('lineChart'), {
+            type: 'line',
+            data: {
+                labels: {{ dates|tojson }},
+                datasets: [{
+                    label: 'Sales Trend',
+                    data: {{ totals|tojson }},
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            }
+        });
+    </script>
+</body>
+</html>
