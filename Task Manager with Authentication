@@ -10,7 +10,7 @@ app.secret_key = "supersecretkey"
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "Hi@123sai",
+    "password": "password",
     "database": "clipboard_db"
 }
 
