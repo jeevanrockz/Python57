@@ -1,0 +1,178 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import mysql.connector
+from werkzeug.security import generate_password_hash, check_password_hash
+
+app = Flask(__name__)
+app.secret_key = "supersecretkey"
+
+# MySQL configuration
+db_config = {
+    "host": "localhost",
+    "user": "root",
+    "password": "Hi@123sai",
+    "database": "clipboard_db"
+}
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+class User(UserMixin):
+    def __init__(self, id, username, password_hash, role):
+        self.id = id
+        self.username = username
+        self.password_hash = password_hash
+        self.role = role
+
+@login_manager.user_loader
+def load_user(user_id):
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        return User(user["id"], user["username"], user["password_hash"], user["role"])
+    return None
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = generate_password_hash(request.form["password"])
+        role = "user"
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
+                       (username, password, role))
+        conn.commit()
+        conn.close()
+        flash("Registration successful! Please log in.")
+        return redirect(url_for("login"))
+    return render_template("register.html")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
+        user = cursor.fetchone()
+        conn.close()
+        if user and check_password_hash(user["password_hash"], password):
+            login_user(User(user["id"], user["username"], user["password_hash"], user["role"]))
+            return redirect(url_for("dashboard"))
+        else:
+            flash("Invalid credentials")
+    return render_template("login.html")
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
+    cursor.execute("SELECT deadline, COUNT(*) FROM tasks WHERE user_id=%s GROUP BY deadline ORDER BY deadline",
+                   (current_user.id,))
+    trend_data = cursor.fetchall()
+    conn.close()
+
+    dates = [str(row[0]) for row in trend_data]
+    totals = [row[1] for row in trend_data]
+
+    return render_template("aipoweredtm.html", dates=dates, totals=totals)
+
+@app.route("/add_task", methods=["POST"])
+@login_required
+def add_task():
+    title = request.form["title"]
+    description = request.form["description"]
+    deadline = request.form["deadline"]
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO tasks (user_id, title, description, deadline) VALUES (%s, %s, %s, %s)",
+                   (current_user.id, title, description, deadline))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("dashboard"))
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+register.html:-
+<!DOCTYPE html>
+<html>
+<head><title>Register</title></head>
+<body>
+    <h1>Register</h1>
+    <form method="post">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Register</button>
+    </form>
+    <a href="/login">Already have an account? Login</a>
+</body>
+</html>
+
+login.html:-
+<!DOCTYPE html>
+<html>
+<head><title>Login</title></head>
+<body>
+    <h1>Login</h1>
+    <form method="post">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Login</button>
+    </form>
+    <a href="/register">Don’t have an account? Register</a>
+</body>
+</html>
+
+aipoweredtm.html:-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Manager Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Welcome, {{ current_user.username }}</h1>
+    <form action="/add_task" method="post">
+        <input type="text" name="title" placeholder="Task Title" required>
+        <input type="text" name="description" placeholder="Description" required>
+        <input type="date" name="deadline" required>
+        <button type="submit">Add Task</button>
+    </form>
+
+    <h2>Sales Trend (Tasks by Deadline)</h2>
+    <canvas id="lineChart"></canvas>
+
+    <script>
+        new Chart(document.getElementById('lineChart'), {
+            type: 'line',
+            data: {
+                labels: {{ dates|tojson }},
+                datasets: [{
+                    label: 'Tasks Count',
+                    data: {{ totals|tojson }},
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            }
+        });
+    </script>
+
+    <a href="/logout">Logout</a>
+</body>
+</html>
