@@ -1,0 +1,26 @@
+import csv
+
+def read_csv_to_dict(filename):
+    data_dict = {}
+    with open(filename, mode='r', newline='', encoding='utf-8') as file:
+        reader = csv.reader(file)
+        headers = next(reader)  # First row is header
+
+        # Initialize dictionary with empty lists
+        for header in headers:
+            data_dict[header] = []
+
+        # Populate dictionary
+        for row in reader:
+            for i, value in enumerate(row):
+                data_dict[headers[i]].append(value)
+
+    return data_dict
+
+# Example usage
+if __name__ == "__main__":
+    filename = r"C:\Users\jeeva\OneDrive\Desktop\Emissions.csv"   # Replace with your CSV file path
+    result = read_csv_to_dict(filename)
+    print("Dictionary created from CSV:\n")
+    for key, values in result.items():
+        print(f"{key}: {values}")
