@@ -1,0 +1,185 @@
+from flask import Flask, request, jsonify, render_template
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+import mysql.connector
+from werkzeug.security import generate_password_hash, check_password_hash
+
+app = Flask(__name__)
+app.config["JWT_SECRET_KEY"] = "supersecretkeysupersecretkeysupersecretkey"
+jwt = JWTManager(app)
+
+db_config = {
+    "host": "localhost",
+    "user": "root",
+    "password": "Hi@123sai",
+    "database": "blog_api"
+}
+
+def get_db():
+    return mysql.connector.connect(**db_config)
+
+@app.route("/")
+def index():
+    # Render a simple HTML client
+    return render_template("restful.html")
+
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.json
+    username = data["username"]
+    password = generate_password_hash(data["password"])
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s,%s)", (username,password))
+    conn.commit()
+    conn.close()
+    return jsonify({"msg": "User registered successfully"}), 201
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.json
+    username = data["username"]
+    password = data["password"]
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
+    user = cursor.fetchone()
+    conn.close()
+    if user and check_password_hash(user["password_hash"], password):
+        token = create_access_token(identity=str(user["id"]))
+        return jsonify({"access_token": token})
+    return jsonify({"msg": "Invalid credentials"}), 401
+
+@app.route("/posts", methods=["POST"])
+@jwt_required()
+def create_post():
+    user_id = get_jwt_identity()
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO posts (user_id, title, content) VALUES (%s,%s,%s)",
+                   (user_id, data["title"], data["content"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"msg": "Post created"}), 201
+
+@app.route("/posts", methods=["GET"])
+def get_posts():
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM posts ORDER BY created_at DESC")
+    posts = cursor.fetchall()
+    conn.close()
+    return jsonify(posts)
+
+@app.route("/posts/<int:post_id>", methods=["PUT"])
+@jwt_required()
+def update_post(post_id):
+    user_id = get_jwt_identity()
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE posts SET title=%s, content=%s WHERE id=%s AND user_id=%s",
+                   (data["title"], data["content"], post_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"msg": "Post updated"})
+
+@app.route("/posts/<int:post_id>", methods=["DELETE"])
+@jwt_required()
+def delete_post(post_id):
+    user_id = get_jwt_identity()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM posts WHERE id=%s AND user_id=%s", (post_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"msg": "Post deleted"})
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+html:-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flask Blog API Client</title>
+</head>
+<body>
+    <h1>Flask Blog API Demo</h1>
+
+    <h2>Register</h2>
+    <input id="regUser" placeholder="Username">
+    <input id="regPass" type="password" placeholder="Password">
+    <button onclick="register()">Register</button>
+
+    <h2>Login</h2>
+    <input id="loginUser" placeholder="Username">
+    <input id="loginPass" type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+
+    <h2>Create Post</h2>
+    <input id="postTitle" placeholder="Title">
+    <textarea id="postContent" placeholder="Content"></textarea>
+    <button onclick="createPost()">Create Post</button>
+
+    <h2>All Posts</h2>
+    <button onclick="getPosts()">Load Posts</button>
+    <div id="posts"></div>
+
+    <script>
+        let token = "";
+
+        function register(){
+            fetch("/register", {
+                method: "POST",
+                headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({
+                    username: document.getElementById("regUser").value,
+                    password: document.getElementById("regPass").value
+                })
+            }).then(res => res.json()).then(data => alert(JSON.stringify(data)));
+        }
+
+        function login(){
+            fetch("/login", {
+                method: "POST",
+                headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({
+                    username: document.getElementById("loginUser").value,
+                    password: document.getElementById("loginPass").value
+                })
+            }).then(res => res.json()).then(data => {
+                token = data.access_token;
+                alert("Logged in! Token saved.");
+            });
+        }
+
+        function createPost(){
+            fetch("/posts", {
+                method: "POST",
+                headers: {
+                    "Content-Type":"application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({
+                    title: document.getElementById("postTitle").value,
+                    content: document.getElementById("postContent").value
+                })
+            }).then(res => res.json()).then(data => alert(JSON.stringify(data)));
+        }
+
+        function getPosts(){
+            fetch("/posts")
+            .then(res => res.json())
+            .then(posts => {
+                let div = document.getElementById("posts");
+                div.innerHTML = "";
+                posts.forEach(p => {
+                    div.innerHTML += `<h3>${p.title}</h3><p>${p.content}</p><hr>`;
+                });
+            });
+        }
+    </script>
+</body>
+</html>
