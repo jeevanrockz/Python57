@@ -10,7 +10,7 @@ jwt = JWTManager(app)
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "Hi@123sai",
+    "password": "password",
     "database": "blog_api"
 }
 
