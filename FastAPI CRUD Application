@@ -1,0 +1,149 @@
+main.py:-
+from fastapi import FastAPI, Depends, Request
+from fastapi.responses import HTMLResponse
+from sqlalchemy.orm import Session
+from app import routes, database, models
+
+app = FastAPI()
+
+@app.on_event("startup")
+def startup_event():
+    database.Base.metadata.create_all(bind=database.engine)
+
+# Root route: display all items in the database
+@app.get("/", response_class=HTMLResponse)
+def read_root(request: Request, db: Session = Depends(database.get_db)):
+    items = db.query(models.Item).all()
+
+    # Build HTML table
+    html_content = """
+    <html>
+        <head>
+            <title>FastAPI CRUD App</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                h1 { color: #4CAF50; text-align: center; }
+                table { width: 60%; margin: auto; border-collapse: collapse; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+                th { background-color: #f2f2f2; }
+            </style>
+        </head>
+        <body>
+            <h1>Items in Database</h1>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                </tr>
+    """
+
+    for item in items:
+        html_content += f"<tr><td>{item.id}</td><td>{item.name}</td><td>{item.price}</td></tr>"
+
+    html_content += """
+            </table>
+        </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html_content)
+
+# Include your CRUD routes
+app.include_router(routes.router)
+
+
+__init__.py:-
+from . import routes, models, database
+
+routes.py:-
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from . import models, schemas, database
+
+router = APIRouter()
+
+# Create Item
+@router.post("/items/", response_model=schemas.Item)
+def create_item(item: schemas.ItemCreate, db: Session = Depends(database.get_db)):
+    db_item = models.Item(name=item.name, price=item.price)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+# Read Item
+@router.get("/items/{item_id}", response_model=schemas.Item)
+def read_item(item_id: int, db: Session = Depends(database.get_db)):
+    item = db.query(models.Item).filter(models.Item.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
+
+# Update Item
+@router.put("/items/{item_id}", response_model=schemas.Item)
+def update_item(item_id: int, item: schemas.ItemCreate, db: Session = Depends(database.get_db)):
+    db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
+    if db_item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db_item.name = item.name
+    db_item.price = item.price
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+# Delete Item
+@router.delete("/items/{item_id}")
+def delete_item(item_id: int, db: Session = Depends(database.get_db)):
+    db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
+    if db_item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Item deleted successfully"}
+
+schemas.py:-
+from pydantic import BaseModel
+
+class ItemBase(BaseModel):
+    name: str
+    price: int
+
+class ItemCreate(ItemBase):
+    pass
+
+class Item(ItemBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+models.py:-
+from sqlalchemy import Column, Integer, String
+from .database import Base
+
+class Item(Base):
+    __tablename__ = "items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    price = Column(Integer)
+
+database.py:-
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+DATABASE_URL = "mysql+pymysql://root:password@localhost:3306/mydatabase"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+# Dependency 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
