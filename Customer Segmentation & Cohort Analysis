@@ -1,0 +1,122 @@
+code 1:-
+import pandas as pd
+import numpy as np
+
+# -------------------------------
+# Step 1: Load datasets
+# -------------------------------
+customers = pd.read_csv("customers.csv")
+transactions = pd.read_csv("transactions.csv")
+support = pd.read_csv("support_tickets.csv")
+
+# Ensure dates are parsed correctly
+transactions["Date"] = pd.to_datetime(transactions["Date"], errors="coerce")
+customers["JoinDate"] = pd.to_datetime(customers["JoinDate"], errors="coerce")
+support["TicketDate"] = pd.to_datetime(support["TicketDate"], errors="coerce")
+
+# -------------------------------
+# Step 2: RFM Segmentation
+# -------------------------------
+snapshot_date = transactions["Date"].max() + pd.Timedelta(days=1)
+
+rfm = transactions.groupby("CustomerID").agg({
+    "Date": lambda x: (snapshot_date - x.max()).days,   # Recency
+    "TransactionID": "count",                           # Frequency
+    "Amount": "sum"                                     # Monetary
+})
+
+rfm.rename(columns={
+    "Date": "Recency",
+    "TransactionID": "Frequency",
+    "Amount": "Monetary"
+}, inplace=True)
+
+# Assign scores using quintiles
+rfm["R_Score"] = pd.qcut(rfm["Recency"], 5, labels=[5,4,3,2,1])
+rfm["F_Score"] = pd.qcut(rfm["Frequency"].rank(method="first"), 5, labels=[1,2,3,4,5])
+rfm["M_Score"] = pd.qcut(rfm["Monetary"], 5, labels=[1,2,3,4,5])
+
+# Create RFM segment
+rfm["RFM_Segment"] = (
+    rfm["R_Score"].astype(str) +
+    rfm["F_Score"].astype(str) +
+    rfm["M_Score"].astype(str)
+)
+
+# -------------------------------
+# Step 3: Cohort Analysis
+# -------------------------------
+transactions["OrderMonth"] = transactions["Date"].dt.to_period("M")
+transactions["CohortMonth"] = transactions.groupby("CustomerID")["Date"].transform("min").dt.to_period("M")
+
+# Cohort index = months since first purchase
+def cohort_index(df):
+    return (df["OrderMonth"].dt.to_timestamp() - df["CohortMonth"].dt.to_timestamp()).dt.days // 30
+
+transactions["CohortIndex"] = cohort_index(transactions)
+
+# Build cohort counts
+cohort_data = transactions.groupby(["CohortMonth", "CohortIndex"])["CustomerID"].nunique().reset_index()
+cohort_counts = cohort_data.pivot(index="CohortMonth", columns="CohortIndex", values="CustomerID")
+
+# Retention matrix
+cohort_sizes = cohort_counts.iloc[:,0]
+retention = cohort_counts.divide(cohort_sizes, axis=0)
+
+# -------------------------------
+# Step 4: Support Ticket Impact
+# -------------------------------
+complaints = support.groupby("CustomerID")["TicketID"].count().reset_index()
+complaints.rename(columns={"TicketID": "ComplaintCount"}, inplace=True)
+
+rfm = rfm.merge(complaints, on="CustomerID", how="left").fillna(0)
+
+# -------------------------------
+# Step 5: Export Results
+# -------------------------------
+rfm.to_csv("customer_segments.csv", index=True)
+retention.to_csv("cohort_analysis.csv")
+
+print("✅ Customer segmentation and cohort analysis completed successfully!")
+
+code 2:-
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Load the retention matrix you exported earlier
+retention = pd.read_csv("cohort_analysis.csv", index_col=0)
+
+# Plot heatmap
+plt.figure(figsize=(12, 6))
+sns.heatmap(retention, annot=True, fmt=".0%", cmap="Blues")
+
+plt.title("Cohort Retention Heatmap")
+plt.ylabel("Cohort Month")
+plt.xlabel("Months Since First Purchase")
+plt.tight_layout()
+plt.show()
+
+code 3:-
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load the customer segments you exported earlier
+rfm = pd.read_csv("customer_segments.csv", index_col=0)
+
+# Count customers per RFM segment
+segment_counts = rfm["RFM_Segment"].value_counts().reset_index()
+segment_counts.columns = ["RFM_Segment", "CustomerCount"]
+
+# Plot bar chart
+plt.figure(figsize=(12,6))
+sns.barplot(data=segment_counts, x="RFM_Segment", y="CustomerCount", palette="viridis")
+
+plt.title("Customer Distribution by RFM Segment")
+plt.xlabel("RFM Segment (Recency-Frequency-Monetary)")
+plt.ylabel("Number of Customers")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
