@@ -1,0 +1,76 @@
+code:-
+import pandas as pd
+
+# Step 1: Load data
+patients = pd.read_csv("patients.csv")
+admissions = pd.read_csv("admissions.csv")
+treatments = pd.read_csv("treatments.csv")
+billing = pd.read_csv("billing.csv")
+
+# Step 2: Clean data
+admissions["AdmissionDate"] = pd.to_datetime(admissions["AdmissionDate"])
+admissions["DischargeDate"] = pd.to_datetime(admissions["DischargeDate"])
+billing["PaymentDate"] = pd.to_datetime(billing["PaymentDate"])
+
+# Step 3: Patient analysis
+admissions["LengthOfStay"] = (admissions["DischargeDate"] - admissions["AdmissionDate"]).dt.days
+avg_stay_per_dept = admissions.groupby("Department")["LengthOfStay"].mean()
+
+# Step 4: Treatment analysis
+treatment_costs = treatments.groupby("AdmissionID")["Cost"].sum()
+admissions = admissions.merge(treatment_costs, on="AdmissionID", how="left", suffixes=("", "_Treatment"))
+
+# Step 5: Billing analysis
+billing_summary = billing.groupby("AdmissionID").agg({
+    "AmountPaid": "sum",
+    "PaymentDate": "max"
+})
+admissions = admissions.merge(billing_summary, on="AdmissionID", how="left")
+admissions["Outstanding"] = admissions["Cost"] - admissions["AmountPaid"]
+
+# Step 6: Hospital performance
+revenue_per_dept = admissions.groupby("Department")["AmountPaid"].sum()
+readmissions = admissions.groupby("PatientID")["AdmissionDate"].diff().dt.days
+readmission_rate = (readmissions < 30).sum() / len(admissions)
+
+# Step 7: Export results
+admissions.to_csv("patient_summary.csv", index=False)
+avg_stay_per_dept.to_csv("department_performance.csv")
+billing_summary.to_csv("billing_summary.csv")
+
+print("✅ Hospital analytics completed successfully!")
+print(f"Readmission rate: {readmission_rate:.2%}")
+
+patients.csv:-
+PatientID,Name,Age,Gender,City
+P001,John Doe,45,M,New York
+P002,Jane Smith,38,F,Chicago
+P003,David Lee,60,M,Los Angeles
+P004,Sarah Kim,29,F,Houston
+
+admissions.csv:-
+AdmissionID,PatientID,AdmissionDate,DischargeDate,Department
+A001,P001,2023-01-01,2023-01-05,Cardiology
+A002,P002,2023-01-03,2023-01-07,Orthopedics
+A003,P003,2023-01-04,2023-01-10,Neurology
+A004,P001,2023-02-01,2023-02-04,Cardiology
+A005,P004,2023-02-02,2023-02-06,Pediatrics
+
+treatments.csv:-
+TreatmentID,AdmissionID,Procedure,Cost
+T001,A001,ECG,200
+T002,A001,Angioplasty,5000
+T003,A002,X-Ray,150
+T004,A002,Surgery,3000
+T005,A003,MRI,800
+T006,A003,Neurosurgery,7000
+T007,A004,Checkup,100
+T008,A005,Vaccination,50
+
+billing.csv:-
+BillID,AdmissionID,AmountPaid,PaymentDate
+B001,A001,5200,2023-01-06
+B002,A002,3150,2023-01-08
+B003,A003,7800,2023-01-12
+B004,A004,100,2023-02-05
+B005,A005,50,2023-02-07
