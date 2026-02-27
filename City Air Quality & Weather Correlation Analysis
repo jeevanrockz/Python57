@@ -1,0 +1,51 @@
+code:-
+import pandas as pd
+
+# Step 1: Load datasets
+air_quality = pd.read_csv("air_quality.csv")
+weather = pd.read_csv("weather.csv")
+
+# Step 2: Clean data
+air_quality["Date"] = pd.to_datetime(air_quality["Date"])
+weather["Date"] = pd.to_datetime(weather["Date"])
+
+# Step 3: Merge datasets
+data = pd.merge(air_quality, weather, on=["Date", "City"], how="inner")
+
+# Step 4: Correlation analysis
+correlation_matrix = data[["AQI", "Temperature", "Humidity", "WindSpeed"]].corr()
+
+# Step 5: City-level insights
+city_aqi_summary = data.groupby("City")["AQI"].mean().sort_values()
+seasonal_trends = data.groupby(data["Date"].dt.month)["AQI"].mean()
+
+# Step 6: Export results
+city_aqi_summary.to_csv("city_aqi_summary.csv")
+correlation_matrix.to_csv("correlation_matrix.csv")
+seasonal_trends.to_csv("seasonal_trends.csv")
+
+print("✅ Air quality & weather analysis completed successfully!")
+
+air_quality.csv:-
+Date,City,PM25,PM10,AQI
+2023-01-01,New York,35,60,80
+2023-01-01,Chicago,40,70,90
+2023-01-01,Los Angeles,55,100,120
+2023-01-02,New York,30,55,75
+2023-01-02,Chicago,42,68,92
+2023-01-02,Los Angeles,60,110,130
+2023-01-03,New York,28,50,70
+2023-01-03,Chicago,38,65,85
+2023-01-03,Los Angeles,58,105,125
+
+weather.csv:-
+Date,City,Temperature,Humidity,WindSpeed
+2023-01-01,New York,5,60,12
+2023-01-01,Chicago,-2,65,15
+2023-01-01,Los Angeles,15,55,8
+2023-01-02,New York,6,58,10
+2023-01-02,Chicago,-1,63,14
+2023-01-02,Los Angeles,16,50,7
+2023-01-03,New York,4,62,11
+2023-01-03,Chicago,-3,67,16
+2023-01-03,Los Angeles,14,53,9
