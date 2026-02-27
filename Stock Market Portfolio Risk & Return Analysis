@@ -1,0 +1,56 @@
+code:-
+import pandas as pd
+
+# Step 1: Load datasets
+stocks = pd.read_csv("stocks.csv")
+portfolio = pd.read_csv("portfolio.csv")
+
+# Step 2: Clean data
+stocks["Date"] = pd.to_datetime(stocks["Date"])
+pivoted = stocks.pivot(index="Date", columns="Ticker", values="ClosePrice").ffill()
+
+# Step 3: Calculate returns
+returns = pivoted.pct_change().dropna()
+
+# Step 4: Portfolio analysis
+weights = portfolio.set_index("Ticker")["Weight"]
+portfolio_returns = (returns * weights).sum(axis=1)
+cumulative_value = (1 + portfolio_returns).cumprod()
+
+# Step 5: Risk metrics
+volatility = portfolio_returns.std() * (252 ** 0.5)   # annualized volatility
+avg_return = portfolio_returns.mean() * 252           # annualized return
+sharpe_ratio = avg_return / volatility                # assuming risk-free rate = 0
+correlation_matrix = returns.corr()
+
+# Step 6: Export results
+returns.to_csv("stock_returns.csv")
+pd.DataFrame({"PortfolioReturn": portfolio_returns, "CumulativeValue": cumulative_value}).to_csv("portfolio_performance.csv")
+pd.DataFrame({"Volatility":[volatility], "SharpeRatio":[sharpe_ratio]}).to_csv("risk_metrics.csv")
+correlation_matrix.to_csv("correlation_matrix.csv")
+
+print("✅ Portfolio risk & return analysis completed successfully!")
+print(f"Annualized Return: {avg_return:.2%}")
+print(f"Annualized Volatility: {volatility:.2%}")
+print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
+
+stocks.csv:
+Date,Ticker,ClosePrice
+2023-01-02,AAPL,130
+2023-01-02,MSFT,240
+2023-01-02,GOOG,90
+2023-01-03,AAPL,132
+2023-01-03,MSFT,242
+2023-01-03,GOOG,91
+2023-01-04,AAPL,131
+2023-01-04,MSFT,245
+2023-01-04,GOOG,92
+2023-01-05,AAPL,134
+2023-01-05,MSFT,247
+2023-01-05,GOOG,93
+
+portfolio.csv:-
+Ticker,Weight
+AAPL,0.4
+MSFT,0.4
+GOOG,0.2
