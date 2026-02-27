@@ -1,0 +1,78 @@
+code:-
+import pandas as pd
+
+# Step 1: Load datasets
+traffic = pd.read_csv("traffic_sensors.csv")
+transit = pd.read_csv("transit_usage.csv")
+rideshare = pd.read_csv("rideshare.csv")
+weather = pd.read_csv("weather.csv")
+
+# Step 2: Clean data
+traffic["Timestamp"] = pd.to_datetime(traffic["Timestamp"])
+transit["Date"] = pd.to_datetime(transit["Date"])
+rideshare["PickupTime"] = pd.to_datetime(rideshare["PickupTime"])
+rideshare["DropoffTime"] = pd.to_datetime(rideshare["DropoffTime"])
+weather["Date"] = pd.to_datetime(weather["Date"])
+
+# Step 3: Traffic analysis
+traffic["Date"] = traffic["Timestamp"].dt.date
+daily_traffic = traffic.groupby("Date")["VehicleCount"].sum().reset_index()
+
+# Convert Date to datetime for consistency
+daily_traffic["Date"] = pd.to_datetime(daily_traffic["Date"])
+weather["Date"] = pd.to_datetime(weather["Date"])
+
+# Step 4: Transit analysis
+avg_ridership = transit.groupby("Mode")["Ridership"].mean()
+
+# Step 5: Ride-sharing analysis
+rideshare["TripDurationMin"] = (rideshare["DropoffTime"] - rideshare["PickupTime"]).dt.total_seconds() / 60
+avg_trip_stats = rideshare[["DistanceKm","Fare","TripDurationMin"]].mean()
+
+# Step 6: Weather impact
+traffic_weather = pd.merge(daily_traffic, weather, on="Date", how="inner")
+correlation = traffic_weather[["VehicleCount","Rainfall","Temperature"]].corr()
+
+# Step 7: Export results
+daily_traffic.to_csv("traffic_summary.csv", index=False)
+avg_ridership.to_csv("transit_summary.csv")
+avg_trip_stats.to_csv("rideshare_summary.csv")
+correlation.to_csv("weather_impact.csv")
+
+print("✅ Smart city transportation analysis completed successfully!")
+
+traffic_sensors.csv:-
+Timestamp,SensorID,VehicleCount
+2023-01-01 08:00:00,S1,120
+2023-01-01 09:00:00,S1,150
+2023-01-01 08:00:00,S2,80
+2023-01-01 09:00:00,S2,95
+2023-01-02 08:00:00,S1,130
+2023-01-02 09:00:00,S1,160
+2023-01-02 08:00:00,S2,85
+2023-01-02 09:00:00,S2,100
+
+transit_usage.csv:-
+Timestamp,SensorID,VehicleCount
+2023-01-01 08:00:00,S1,120
+2023-01-01 09:00:00,S1,150
+2023-01-01 08:00:00,S2,80
+2023-01-01 09:00:00,S2,95
+2023-01-02 08:00:00,S1,130
+2023-01-02 09:00:00,S1,160
+2023-01-02 08:00:00,S2,85
+2023-01-02 09:00:00,S2,100
+
+rideshare.csv:-
+PickupTime,DropoffTime,DistanceKm,Fare
+2023-01-01 08:15:00,2023-01-01 08:35:00,10,15
+2023-01-01 09:00:00,2023-01-01 09:20:00,8,12
+2023-01-02 08:45:00,2023-01-02 09:10:00,12,18
+2023-01-02 09:30:00,2023-01-02 09:50:00,7,10
+2023-01-03 08:20:00,2023-01-03 08:40:00,9,14
+
+weather.csv:-
+Date,Temperature,Rainfall,WindSpeed
+2023-01-01,10,5,12
+2023-01-02,12,0,10
+2023-01-03,9,8,15
