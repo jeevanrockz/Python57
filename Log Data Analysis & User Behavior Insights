@@ -1,0 +1,60 @@
+code:-
+import pandas as pd
+
+# Step 1: Load logs
+logs = pd.read_csv("app_logs.csv")
+errors = pd.read_csv("error_logs.csv")
+
+# Step 2: Clean data
+logs["Timestamp"] = pd.to_datetime(logs["Timestamp"])
+errors["Timestamp"] = pd.to_datetime(errors["Timestamp"])
+logs["Action"] = logs["Action"].str.lower().str.strip()
+
+# Step 3: Session analysis
+session_summary = logs.groupby("UserID").agg({
+    "Timestamp": [min, max],
+    "Action": "count"
+})
+session_summary["SessionLengthMinutes"] = (
+    session_summary["Timestamp"]["max"] - session_summary["Timestamp"]["min"]
+).dt.total_seconds() / 60
+
+# Step 4: Error trends (hourly)
+error_trends = errors.resample("h", on="Timestamp")["StatusCode"].count()
+
+# Step 5: User behavior
+action_counts = logs["Action"].value_counts().head(10)
+
+# Step 6: Performance metrics
+requests_per_min = logs.resample("min", on="Timestamp")["Action"].count()
+error_rate = len(errors) / len(logs)
+
+# Step 7: Export results
+session_summary.to_csv("session_summary.csv")
+error_trends.to_csv("error_trends.csv")
+action_counts.to_csv("user_behavior.csv")
+requests_per_min.to_csv("requests_per_min.csv")
+
+print("✅ Log analysis completed successfully!")
+print(f"Overall error rate: {error_rate:.2%}")
+
+app_logs.csv:-
+Timestamp,UserID,Action
+2023-01-01 09:00:00,U001,Login
+2023-01-01 09:05:00,U001,ViewPage
+2023-01-01 09:10:00,U001,Logout
+2023-01-01 09:15:00,U002,Login
+2023-01-01 09:20:00,U002,ViewPage
+2023-01-01 09:25:00,U002,Purchase
+2023-01-01 09:30:00,U002,Logout
+2023-01-01 10:00:00,U003,Login
+2023-01-01 10:05:00,U003,ViewPage
+2023-01-01 10:15:00,U003,Error
+2023-01-01 10:20:00,U003,Logout
+
+error_logs.csv:-
+Timestamp,UserID,StatusCode
+2023-01-01 10:15:00,U003,500
+2023-01-01 11:00:00,U002,404
+2023-01-01 12:30:00,U001,503
+2023-01-01 13:00:00,U003,500
