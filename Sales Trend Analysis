@@ -1,0 +1,105 @@
+code 1:-
+import pandas as pd
+
+# Step 1: Load data
+sales = pd.read_csv("sales.csv")
+sales["Date"] = pd.to_datetime(sales["Date"])
+
+# Step 2: Clean data
+sales["SalesAmount"] = sales["SalesAmount"].fillna(0)
+
+# Step 3: Resample by week and month
+weekly_sales = sales.resample("W", on="Date")["SalesAmount"].sum()
+monthly_sales = sales.resample("ME", on="Date")["SalesAmount"].sum()
+
+# Step 4: Rolling average (7-day trend)
+sales["7DayAvg"] = sales["SalesAmount"].rolling(window=7).mean()
+
+# Step 5: Store comparison
+store_summary = sales.groupby("StoreID")["SalesAmount"].mean().sort_values(ascending=False)
+
+# Step 6: Export results
+weekly_sales.to_csv("weekly_sales.csv")
+monthly_sales.to_csv("monthly_sales.csv")
+store_summary.to_csv("store_summary.csv")
+
+print("✅ Sales trend analysis completed successfully!")
+
+code 2:-
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load sales data
+sales = pd.read_csv("sales.csv")
+sales["Date"] = pd.to_datetime(sales["Date"])
+sales["SalesAmount"] = sales["SalesAmount"].fillna(0)
+
+# Weekly and monthly resampling
+weekly_sales = sales.resample("W", on="Date")["SalesAmount"].sum()
+monthly_sales = sales.resample("ME", on="Date")["SalesAmount"].sum()
+
+
+# Plot weekly sales trend
+plt.figure(figsize=(12,6))
+plt.plot(weekly_sales.index, weekly_sales.values, marker="o", linestyle="-", color="blue")
+plt.title("Weekly Sales Trend")
+plt.xlabel("Week")
+plt.ylabel("Total Sales")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# Plot monthly sales trend
+plt.figure(figsize=(12,6))
+plt.plot(monthly_sales.index, monthly_sales.values, marker="o", linestyle="-", color="green")
+plt.title("Monthly Sales Trend")
+plt.xlabel("Month")
+plt.ylabel("Total Sales")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# Rolling average for daily sales
+sales["7DayAvg"] = sales["SalesAmount"].rolling(window=7).mean()
+
+plt.figure(figsize=(12,6))
+plt.plot(sales["Date"], sales["SalesAmount"], alpha=0.5, label="Daily Sales")
+plt.plot(sales["Date"], sales["7DayAvg"], color="red", linewidth=2, label="7-Day Rolling Avg")
+plt.title("Daily Sales with 7-Day Rolling Average")
+plt.xlabel("Date")
+plt.ylabel("Sales Amount")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+sales.csv:-
+Date,StoreID,SalesAmount
+2023-01-01,StoreA,250
+2023-01-01,StoreB,300
+2023-01-02,StoreA,270
+2023-01-02,StoreB,310
+2023-01-03,StoreA,260
+2023-01-03,StoreB,320
+2023-01-04,StoreA,280
+2023-01-04,StoreB,330
+2023-01-05,StoreA,290
+2023-01-05,StoreB,340
+2023-01-06,StoreA,310
+2023-01-06,StoreB,350
+2023-01-07,StoreA,400
+2023-01-07,StoreB,500
+2023-01-08,StoreA,420
+2023-01-08,StoreB,520
+2023-01-09,StoreA,390
+2023-01-09,StoreB,480
+2023-01-10,StoreA,370
+2023-01-10,StoreB,460
+2023-01-11,StoreA,360
+2023-01-11,StoreB,450
+2023-01-12,StoreA,380
+2023-01-12,StoreB,470
+2023-01-13,StoreA,400
+2023-01-13,StoreB,490
+2023-01-14,StoreA,420
+2023-01-14,StoreB,510
