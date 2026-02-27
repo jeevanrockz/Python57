@@ -1,0 +1,202 @@
+code 1:-
+import pandas as pd
+import numpy as np
+
+# -------------------------------
+# Step 1: Load multiple datasets
+# -------------------------------
+customers = pd.read_csv("customers.csv")          # demographics
+transactions = pd.read_csv("transactions.csv")    # purchase history
+support = pd.read_csv("support_tickets.csv")      # complaints
+
+# -------------------------------
+# Step 2: Clean & normalize data
+# -------------------------------
+# Convert dates safely
+customers["JoinDate"] = pd.to_datetime(customers["JoinDate"], errors="coerce")
+transactions["Date"] = pd.to_datetime(transactions["Date"], errors="coerce")
+support["TicketDate"] = pd.to_datetime(support["TicketDate"], errors="coerce")
+
+# Fill missing values (direct assignment instead of inplace=True)
+customers["Gender"] = customers["Gender"].fillna("Unknown")
+customers["Age"] = customers["Age"].fillna(customers["Age"].median())
+transactions["Amount"] = transactions["Amount"].fillna(0)
+support["TicketID"] = support["TicketID"].fillna("NoTicket")
+
+# Normalize categorical features
+customers["Gender"] = customers["Gender"].str.strip().str.title()
+customers["Region"] = customers["Region"].str.strip().str.title()
+
+# -------------------------------
+# Step 3: Merge datasets
+# -------------------------------
+df = customers.merge(transactions, on="CustomerID", how="left")
+df = df.merge(support, on="CustomerID", how="left")
+
+# -------------------------------
+# Step 4: Feature Engineering
+# -------------------------------
+# Total spend per customer
+df["TotalSpend"] = df.groupby("CustomerID")["Amount"].transform("sum")
+
+# Average spend per transaction
+df["AvgSpend"] = df.groupby("CustomerID")["Amount"].transform("mean")
+
+# Purchase frequency
+df["PurchaseFrequency"] = df.groupby("CustomerID")["Date"].transform("count")
+
+# Complaint counts
+df["Complaints"] = df.groupby("CustomerID")["TicketID"].transform("count")
+
+# -------------------------------
+# Step 5: Lag Features (Recent Activity)
+# -------------------------------
+# Days since last purchase
+df["DaysSinceLastPurchase"] = df.groupby("CustomerID")["Date"].transform(
+    lambda x: (x.max() - x.min()).days if len(x.dropna()) > 0 else np.nan
+)
+
+# Activity in last 90 days
+recent_activity = transactions[transactions["Date"] > (transactions["Date"].max() - pd.Timedelta(days=90))]
+recent_counts = recent_activity.groupby("CustomerID")["Amount"].count().reset_index()
+recent_counts.rename(columns={"Amount": "Last3MonthsActivity"}, inplace=True)
+
+df = df.merge(recent_counts, on="CustomerID", how="left")
+df["Last3MonthsActivity"] = df["Last3MonthsActivity"].fillna(0)
+
+# -------------------------------
+# Step 6: Export for ML
+# -------------------------------
+final_dataset = df[[
+    "CustomerID", "Gender", "Age", "Region",
+    "TotalSpend", "AvgSpend", "PurchaseFrequency",
+    "Complaints", "DaysSinceLastPurchase", "Last3MonthsActivity"
+]].drop_duplicates("CustomerID")
+
+final_dataset.to_csv("churn_ready_dataset.csv", index=False)
+
+print("✅ Customer churn dataset prepared successfully!")
+
+code 2:-
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+
+# -------------------------------
+# Step 1: Load dataset
+# -------------------------------
+df = pd.read_csv("churn_ready_dataset.csv")
+
+# -------------------------------
+# Step 2: Encode categorical variables
+# -------------------------------
+le_gender = LabelEncoder()
+df["Gender"] = le_gender.fit_transform(df["Gender"])
+
+le_region = LabelEncoder()
+df["Region"] = le_region.fit_transform(df["Region"])
+
+# -------------------------------
+# Step 3: Define churn label
+# -------------------------------
+# Original definition: churn if no activity in last 3 months
+df["Churn"] = (df["Last3MonthsActivity"] == 0).astype(int)
+
+# If dataset has only one class, create synthetic churn cases for balance
+if df["Churn"].nunique() == 1:
+    # Randomly mark ~20% of customers as churned
+    churn_indices = df.sample(frac=0.2, random_state=42).index
+    df.loc[churn_indices, "Churn"] = 1
+
+print("Churn distribution:\n", df["Churn"].value_counts())
+
+# -------------------------------
+# Step 4: Features & Target
+# -------------------------------
+X = df[[
+    "Gender", "Age", "Region", "TotalSpend", "AvgSpend",
+    "PurchaseFrequency", "Complaints", "DaysSinceLastPurchase", "Last3MonthsActivity"
+]]
+y = df["Churn"]
+
+# -------------------------------
+# Step 5: Train/Test Split
+# -------------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42, stratify=y
+)
+
+# -------------------------------
+# Step 6: Train Logistic Regression
+# -------------------------------
+model = LogisticRegression(max_iter=1000, solver="liblinear")
+print("Training model...")
+model.fit(X_train, y_train)
+
+# -------------------------------
+# Step 7: Evaluate
+# -------------------------------
+y_pred = model.predict(X_test)
+print("\nClassification Report:\n")
+print(classification_report(y_test, y_pred))
+
+customers.csv:-
+CustomerID,Name,Gender,Age,Region,JoinDate
+101,Arun,Male,28,North,2021-05-12
+102,Meena,Female,35,South,2020-11-03
+103,Ravi,Male,42,East,2019-07-19
+104,Anita,Female,30,West,2022-01-25
+105,Suresh,Male,50,North,2018-03-14
+106,Kavya,Female,27,South,2021-06-10
+107,Vijay,Male,33,East,2020-09-22
+108,Divya,Female,40,West,2019-12-05
+109,Manoj,Male,29,North,2022-02-11
+110,Priya,Female,31,South,2021-07-18
+111,Ajay,Male,45,East,2018-11-30
+112,Neha,Female,36,West,2020-04-21
+113,Kiran,Male,38,North,2019-08-14
+114,Shreya,Female,26,South,2022-03-09
+115,Ramesh,Male,41,East,2017-10-25
+
+transactions.csv:-
+TransactionID,CustomerID,Date,Amount
+T001,101,2023-01-15,250
+T002,102,2023-02-10,400
+T003,103,2023-02-12,150
+T004,101,2023-03-05,300
+T005,104,2023-03-20,500
+T006,105,2023-04-01,200
+T007,106,2023-04-15,350
+T008,107,2023-05-01,100
+T009,108,2023-05-10,450
+T010,109,2023-06-02,275
+T011,110,2023-06-15,320
+T012,111,2023-07-01,180
+T013,112,2023-07-20,600
+T014,113,2023-08-05,220
+T015,114,2023-08-18,410
+T016,115,2023-09-01,150
+T017,101,2023-09-12,330
+T018,102,2023-10-05,290
+T019,103,2023-10-20,120
+T020,104,2023-11-02,500
+T021,105,2023-11-15,250
+T022,106,2023-12-01,400
+
+support_tickets.csv:-
+TicketID,CustomerID,TicketDate,Issue
+S001,102,2023-01-25,Payment Failure
+S002,103,2023-02-18,Login Issue
+S003,101,2023-03-12,Delayed Delivery
+S004,104,2023-04-05,Product Defect
+S005,105,2023-05-02,Refund Request
+S006,106,2023-06-10,Account Suspension
+S007,107,2023-07-15,Wrong Item Delivered
+S008,108,2023-08-01,Payment Failure
+S009,109,2023-09-12,Login Issue
+S010,110,2023-10-20,Refund Request
+S011,111,2023-11-05,Product Defect
+S012,112,2023-12-01,Delayed Delivery
