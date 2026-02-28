@@ -1,0 +1,111 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+
+# -----------------------------
+# Step 1: Load Image
+# -----------------------------
+def load_image(path, grayscale=False):
+    """
+    Load an image from file into a NumPy array.
+    If grayscale=True, convert to grayscale.
+    """
+    img = Image.open(path)
+    if grayscale:
+        img = img.convert("L")
+    return np.array(img, dtype=float)
+
+# -----------------------------
+# Step 2: Convolution Filter
+# -----------------------------
+def apply_filter(image, kernel):
+    """
+    Apply a convolution filter to an image using a given kernel.
+    """
+    k = kernel.shape[0]
+    pad = k // 2
+    padded = np.pad(image, pad, mode="constant")
+    output = np.zeros_like(image)
+    for i in range(image.shape[0]):
+        for j in range(image.shape[1]):
+            region = padded[i:i+k, j:j+k]
+            output[i,j] = np.sum(region * kernel)
+    return np.clip(output, 0, 255)
+
+# Example kernels
+blur_kernel = np.ones((3,3)) / 9
+sharpen_kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])
+sobel_x = np.array([[-1,0,1],[-2,0,2],[-1,0,1]])
+sobel_y = np.array([[-1,-2,-1],[0,0,0],[1,2,1]])
+
+# -----------------------------
+# Step 3: Transformations
+# -----------------------------
+def rotate_image(image):
+    """
+    Rotate image by 90 degrees.
+    """
+    return np.rot90(image)
+
+def flip_image(image):
+    """
+    Flip image vertically.
+    """
+    return np.flipud(image)
+
+def scale_image(image, factor=2):
+    """
+    Downscale image by a given factor.
+    """
+    return image[::factor, ::factor]
+
+# -----------------------------
+# Step 4: Edge Detection
+# -----------------------------
+def sobel_edge_detection(image):
+    """
+    Detect edges using Sobel operator.
+    """
+    gx = apply_filter(image, sobel_x)
+    gy = apply_filter(image, sobel_y)
+    return np.sqrt(gx**2 + gy**2)
+
+# -----------------------------
+# Step 5: Visualization
+# -----------------------------
+def show_images(original, processed, title="Processed Image"):
+    """
+    Display original and processed images side by side.
+    """
+    plt.subplot(1,2,1)
+    plt.imshow(original, cmap="gray")
+    plt.title("Original")
+    plt.axis("off")
+
+    plt.subplot(1,2,2)
+    plt.imshow(processed, cmap="gray")
+    plt.title(title)
+    plt.axis("off")
+
+    plt.show()
+
+# -----------------------------
+# Main Execution
+# -----------------------------
+if __name__ == "__main__":
+    # Load a sample image (replace with your own file path)
+    img = load_image(r"c:\Users\jeeva\OneDrive\Desktop\sample.png", grayscale=True)
+
+    blurred = apply_filter(img, blur_kernel)
+    sharpened = apply_filter(img, sharpen_kernel)
+    edges = sobel_edge_detection(img)
+    rotated = rotate_image(img)
+    flipped = flip_image(img)
+    scaled = scale_image(img, factor=2)
+
+    show_images(img, blurred, "Blurred")
+    show_images(img, sharpened, "Sharpened")
+    show_images(img, edges, "Edges")
+    show_images(img, rotated, "Rotated")
+    show_images(img, flipped, "Flipped")
+    show_images(img, scaled, "Scaled")
