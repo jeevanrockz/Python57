@@ -1,0 +1,117 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Step 1: Generate Synthetic Data
+# -----------------------------
+N = 1_000_000
+
+ages = np.random.randint(18, 91, size=N)
+heights = np.random.normal(170, 10, size=N)
+weights = np.random.normal(70, 15, size=N)
+incomes = np.random.lognormal(mean=10, sigma=0.5, size=N)
+
+# Structured array
+dtype = np.dtype([
+    ('age', np.int32),
+    ('height', np.float32),
+    ('weight', np.float32),
+    ('income', np.float64)
+])
+data = np.zeros(N, dtype=dtype)
+data['age'] = ages
+data['height'] = heights
+data['weight'] = weights
+data['income'] = incomes
+
+# -----------------------------
+# Step 2: Complex Queries
+# -----------------------------
+mask_30_40 = (data['age'] >= 30) & (data['age'] <= 40)
+avg_income_30_40 = data['income'][mask_30_40].mean()
+print("Average income (30–40 yrs):", avg_income_30_40)
+
+# BMI calculation
+bmi = data['weight'] / ((data['height']/100) ** 2)
+
+categories = np.empty(N, dtype='<U10')
+categories[bmi < 18.5] = 'Underweight'
+categories[(bmi >= 18.5) & (bmi < 25)] = 'Normal'
+categories[(bmi >= 25) & (bmi < 30)] = 'Overweight'
+categories[bmi >= 30] = 'Obese'
+
+# Top 1% earners
+threshold = np.percentile(data['income'], 99)
+top_earners = data[data['income'] >= threshold]
+print("Top 1% avg age:", top_earners['age'].mean())
+print("Top 1% avg BMI:", (top_earners['weight'] / ((top_earners['height']/100)**2)).mean())
+
+# -----------------------------
+# Step 3: Matrix Operations
+# -----------------------------
+X = np.vstack([data['age'], data['height'], data['weight'], data['income']]).T
+corr_matrix = np.corrcoef(X, rowvar=False)
+print("Correlation matrix:\n", corr_matrix)
+
+eigvals, eigvecs = np.linalg.eig(corr_matrix)
+print("Eigenvalues:", eigvals)
+print("Principal components:\n", eigvecs)
+
+# -----------------------------
+# Step 4: Simulation
+# -----------------------------
+years = 10
+growth_factors = np.random.normal(1.03, 0.02, size=(years, N))
+income_growth = incomes * growth_factors.cumprod(axis=0)[-1]
+
+# Gini coefficient
+def gini(array):
+    array = np.sort(array)
+    n = array.size
+    cum_income = np.cumsum(array)
+    return (n + 1 - 2 * np.sum(cum_income) / cum_income[-1]) / n
+
+gini_before = gini(incomes)
+gini_after = gini(income_growth)
+print("Gini before:", gini_before)
+print("Gini after:", gini_after)
+
+# -----------------------------
+# Step 5: Performance Challenge
+# -----------------------------
+# Naive Python loop for BMI (inefficient)
+def bmi_loop(heights, weights):
+    result = []
+    for h, w in zip(heights, weights):
+        result.append(w / ((h/100)**2))
+    return np.array(result)
+
+import time
+start = time.time()
+bmi_loop_result = bmi_loop(data['height'], data['weight'])
+end = time.time()
+print("Loop BMI time:", end-start)
+
+start = time.time()
+bmi_vectorized = data['weight'] / ((data['height']/100)**2)
+end = time.time()
+print("Vectorized BMI time:", end-start)
+
+# -----------------------------
+# Step 6: Visualization
+# -----------------------------
+plt.figure(figsize=(12,5))
+
+plt.subplot(1,2,1)
+plt.hist(incomes, bins=100, alpha=0.7, label='Before')
+plt.hist(income_growth, bins=100, alpha=0.7, label='After')
+plt.legend()
+plt.title("Income Distribution")
+
+plt.subplot(1,2,2)
+unique, counts = np.unique(categories, return_counts=True)
+plt.bar(unique, counts)
+plt.title("BMI Categories")
+
+plt.tight_layout()
+plt.show()
