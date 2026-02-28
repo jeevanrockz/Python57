@@ -1,0 +1,90 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Step 1: Graph Representation
+# -----------------------------
+def create_graph(num_nodes, edges, weighted=False):
+    """
+    Create an adjacency matrix for a graph.
+    num_nodes: number of nodes
+    edges: list of tuples (u, v, w) where u,v are nodes and w is weight
+    weighted: whether graph is weighted
+    """
+    graph = np.zeros((num_nodes, num_nodes))
+    for (u, v, w) in edges:
+        graph[u, v] = w if weighted else 1
+        graph[v, u] = w if weighted else 1  # undirected graph
+    return graph
+
+# Example graph
+edges = [(0,1,2), (0,2,4), (1,2,1), (1,3,7), (2,3,3)]
+graph = create_graph(4, edges, weighted=True)
+
+# -----------------------------
+# Step 2: Dijkstra’s Algorithm
+# -----------------------------
+def dijkstra(graph, start):
+    """
+    Compute shortest paths from a start node using Dijkstra’s algorithm.
+    """
+    n = graph.shape[0]
+    visited = np.zeros(n, dtype=bool)
+    dist = np.full(n, np.inf)
+    dist[start] = 0
+
+    for _ in range(n):
+        u = np.argmin(np.where(visited, np.inf, dist))
+        visited[u] = True
+        for v in range(n):
+            if graph[u,v] > 0 and not visited[v]:
+                dist[v] = min(dist[v], dist[u] + graph[u,v])
+    return dist
+
+print("Dijkstra distances from node 0:", dijkstra(graph, 0))
+
+# -----------------------------
+# Step 3: Floyd-Warshall Algorithm
+# -----------------------------
+def floyd_warshall(graph):
+    """
+    Compute all-pairs shortest paths using Floyd-Warshall algorithm.
+    """
+    n = graph.shape[0]
+    dist = np.where(graph==0, np.inf, graph)
+    np.fill_diagonal(dist, 0)
+    for k in range(n):
+        dist = np.minimum(dist, dist[:,k][:,None] + dist[k,:])
+    return dist
+
+print("Floyd-Warshall all pairs shortest paths:\n", floyd_warshall(graph))
+
+# -----------------------------
+# Step 4: PageRank Algorithm
+# -----------------------------
+def pagerank(graph, alpha=0.85, iterations=100):
+    """
+    Compute PageRank scores for nodes in a graph.
+    """
+    n = graph.shape[0]
+    out_degree = graph.sum(axis=1)
+    M = np.divide(graph.T, out_degree, where=out_degree!=0)
+    rank = np.ones(n) / n
+    for _ in range(iterations):
+        rank = alpha * M @ rank + (1-alpha)/n
+    return rank
+
+print("PageRank scores:", pagerank(graph))
+
+# -----------------------------
+# Step 5: Visualization
+# -----------------------------
+def visualize_graph(graph, title="Graph Adjacency Matrix"):
+    plt.imshow(graph, cmap="Blues")
+    plt.colorbar(label="Edge Weight")
+    plt.title(title)
+    plt.xlabel("Nodes")
+    plt.ylabel("Nodes")
+    plt.show()
+
+visualize_graph(graph)
