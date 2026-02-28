@@ -1,0 +1,203 @@
+wave_simulation.py:-
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+# -----------------------------
+# Step 1: Grid Setup
+# -----------------------------
+nx, ny = 200, 200   # grid size
+c = 1.0             # wave speed
+dt = 0.1            # time step
+dx = 1.0            # spatial step
+dy = 1.0
+
+# Courant condition for stability
+assert c * dt / dx < 1, "Simulation unstable: adjust dt or dx"
+
+# Initialize wave fields
+u = np.zeros((nx, ny))       # current state
+u_prev = np.zeros((nx, ny))  # previous state
+u_next = np.zeros((nx, ny))  # next state
+
+# Initial disturbance in the center
+u[nx//2, ny//2] = 1.0
+
+# -----------------------------
+# Step 2: Laplacian Function
+# -----------------------------
+def laplacian(field):
+    return (
+        np.roll(field, 1, axis=0) + np.roll(field, -1, axis=0) +
+        np.roll(field, 1, axis=1) + np.roll(field, -1, axis=1) -
+        4 * field
+    ) / (dx * dy)
+
+# -----------------------------
+# Step 3: Update Function
+# -----------------------------
+def update_wave(u, u_prev):
+    return 2*u - u_prev + (c**2 * dt**2) * laplacian(u)
+
+# -----------------------------
+# Step 4: Simulation Loop
+# -----------------------------
+frames = 200
+snapshots = []
+
+for _ in range(frames):
+    u_next = update_wave(u, u_prev)
+    
+    # Boundary conditions (absorbing)
+    u_next[0,:] = u_next[-1,:] = 0
+    u_next[:,0] = u_next[:,-1] = 0
+    
+    # Update states
+    u_prev, u = u, u_next
+    snapshots.append(u.copy())
+
+# -----------------------------
+# Step 5: Visualization
+# -----------------------------
+fig, ax = plt.subplots()
+im = ax.imshow(snapshots[0], cmap='viridis', animated=True)
+
+def animate(i):
+    im.set_array(snapshots[i])
+    return [im]
+
+ani = animation.FuncAnimation(fig, animate, frames=frames, interval=50, blit=True)
+plt.title("Wave Propagation Simulation")
+plt.show()
+
+wavesources.py:-
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from utils import laplacian, update_wave
+
+nx, ny = 200, 200
+c, dt, dx, dy = 1.0, 0.1, 1.0, 1.0
+
+u = np.zeros((nx, ny))
+u_prev = np.zeros((nx, ny))
+
+# Two sources
+u[nx//3, ny//3] = 1.0
+u[2*nx//3, 2*ny//3] = -1.0
+
+frames = 200
+snapshots = []
+
+for _ in range(frames):
+    u_next = update_wave(u, u_prev, c, dt, dx, dy)
+    u_next[0,:] = u_next[-1,:] = 0
+    u_next[:,0] = u_next[:,-1] = 0
+    u_prev, u = u, u_next
+    snapshots.append(u.copy())
+
+fig, ax = plt.subplots()
+im = ax.imshow(snapshots[0], cmap='viridis', animated=True)
+
+def animate(i):
+    im.set_array(snapshots[i])
+    return [im]
+
+ani = animation.FuncAnimation(fig, animate, frames=frames, interval=50, blit=True)
+plt.title("Wave Propagation with Two Sources")
+plt.show()
+
+wave_interference.py:-
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from utils import laplacian, update_wave   # reuse helper functions
+
+# -----------------------------
+# Grid Setup
+# -----------------------------
+nx, ny = 200, 200
+c, dt, dx, dy = 1.0, 0.1, 1.0, 1.0
+
+u = np.zeros((nx, ny))
+u_prev = np.zeros((nx, ny))
+
+# Two sources placed close together
+u[nx//2 - 10, ny//2] = 1.0   # source 1
+u[nx//2 + 10, ny//2] = -1.0  # source 2 (opposite phase)
+
+frames = 200
+snapshots = []
+
+# -----------------------------
+# Simulation Loop
+# -----------------------------
+for _ in range(frames):
+    u_next = update_wave(u, u_prev, c, dt, dx, dy)
+    
+    # Absorbing boundaries
+    u_next[0,:] = u_next[-1,:] = 0
+    u_next[:,0] = u_next[:,-1] = 0
+    
+    u_prev, u = u, u_next
+    snapshots.append(u.copy())
+
+# -----------------------------
+# Visualization
+# -----------------------------
+fig, ax = plt.subplots()
+im = ax.imshow(snapshots[0], cmap='viridis', animated=True)
+
+def animate(i):
+    im.set_array(snapshots[i])
+    return [im]
+
+ani = animation.FuncAnimation(fig, animate, frames=frames, interval=50, blit=True)
+plt.title("Wave Interference Simulation")
+plt.show()
+
+wave_3d.py:-
+import numpy as np
+import matplotlib.pyplot as plt
+
+nx, ny, nz = 50, 50, 50
+c, dt, dx = 1.0, 0.1, 1.0
+
+u = np.zeros((nx, ny, nz))
+u_prev = np.zeros((nx, ny, nz))
+
+# Initial disturbance in the center
+u[nx//2, ny//2, nz//2] = 1.0
+
+def laplacian_3d(field):
+    return (
+        np.roll(field, 1, axis=0) + np.roll(field, -1, axis=0) +
+        np.roll(field, 1, axis=1) + np.roll(field, -1, axis=1) +
+        np.roll(field, 1, axis=2) + np.roll(field, -1, axis=2) -
+        6 * field
+    ) / (dx**2)
+
+def update_wave_3d(u, u_prev):
+    return 2*u - u_prev + (c**2 * dt**2) * laplacian_3d(u)
+
+# Run a few steps and visualize slices
+for step in range(50):
+    u_next = update_wave_3d(u, u_prev)
+    u_prev, u = u, u_next
+
+plt.imshow(u[:,:,nz//2], cmap='viridis')
+plt.title("3D Wave Slice (Z mid-plane)")
+plt.show()
+
+utils.py:-
+import numpy as np
+
+def laplacian(field, dx, dy):
+    return (
+        np.roll(field, 1, axis=0) + np.roll(field, -1, axis=0) +
+        np.roll(field, 1, axis=1) + np.roll(field, -1, axis=1) -
+        4 * field
+    ) / (dx * dy)
+
+def update_wave(u, u_prev, c, dt, dx, dy):
+    return 2*u - u_prev + (c**2 * dt**2) * laplacian(u, dx, dy)
