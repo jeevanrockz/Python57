@@ -1,0 +1,203 @@
+main.py:-
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from app.database import engine, Base
+from app.routes import patients, vitals
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="Real-Time Health Monitoring System")
+
+# Include routers
+app.include_router(patients.router, prefix="/patients", tags=["Patients"])
+app.include_router(vitals.router, prefix="/vitals", tags=["Vitals"])
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Real-Time Health Monitoring System</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background: #f4f6f9;
+                margin: 0;
+                padding: 0;
+                text-align: center;
+            }
+            header {
+                background: #2c3e50;
+                color: white;
+                padding: 20px;
+            }
+            h1 {
+                margin: 0;
+            }
+            .features {
+                margin: 40px auto;
+                max-width: 600px;
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            }
+            ul {
+                list-style-type: none;
+                padding: 0;
+            }
+            li {
+                background: #ecf0f1;
+                margin: 10px 0;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            footer {
+                margin-top: 40px;
+                padding: 10px;
+                background: #2c3e50;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>Real-Time Health Monitoring System</h1>
+        </header>
+        <div class="features">
+            <h2>Features</h2>
+            <ul>
+                <li>Register patients</li>
+                <li>Log real-time vitals (heart rate, temperature, oxygen level)</li>
+                <li>Access REST API endpoints for patients and vitals</li>
+            </ul>
+        </div>
+        <footer>
+            <p>Powered by FastAPI & SQLAlchemy</p>
+        </footer>
+    </body>
+    </html>
+    """
+    return html_content
+
+patients.py:-
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app import models, schemas
+
+router = APIRouter()
+
+@router.post("/", response_model=schemas.Patient)
+def create_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)):
+    db_patient = models.Patient(name=patient.name, age=patient.age, gender=patient.gender)
+    db.add(db_patient)
+    db.commit()
+    db.refresh(db_patient)
+    return db_patient
+
+@router.get("/{patient_id}", response_model=schemas.Patient)
+def read_patient(patient_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+
+schemas.py:-
+from pydantic import BaseModel
+
+class PatientBase(BaseModel):
+    name: str
+    age: int
+    gender: str
+
+class PatientCreate(PatientBase):
+    pass
+
+class Patient(PatientBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+class VitalBase(BaseModel):
+    patient_id: int
+    heart_rate: float
+    temperature: float
+    oxygen_level: float
+
+class VitalCreate(VitalBase):
+    pass
+
+class Vital(VitalBase):
+    id: int
+    class Config:
+        orm_mode = True
+
+vitals.py:-
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app import models, schemas
+
+router = APIRouter()
+
+@router.post("/", response_model=schemas.Vital)
+def create_vital(vital: schemas.VitalCreate, db: Session = Depends(get_db)):
+    db_vital = models.Vital(
+        patient_id=vital.patient_id,
+        heart_rate=vital.heart_rate,
+        temperature=vital.temperature,
+        oxygen_level=vital.oxygen_level
+    )
+    db.add(db_vital)
+    db.commit()
+    db.refresh(db_vital)
+    return db_vital
+
+@router.get("/{vital_id}", response_model=schemas.Vital)
+def read_vital(vital_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Vital).filter(models.Vital.id == vital_id).first()
+
+@router.get("/", response_model=list[schemas.Vital])
+def list_vitals(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    return db.query(models.Vital).offset(skip).limit(limit).all()
+
+database.py:-
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+DATABASE_URL = "mysql+pymysql://root:Hi%40123sai@localhost:3306/mydatabase"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+# Dependency 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+models.py:-
+from sqlalchemy import Column, Integer, String, Float
+from app.database import Base
+
+class Patient(Base):
+    __tablename__ = "patients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50))
+    age = Column(Integer)
+    gender = Column(String(10))
+
+class Vital(Base):
+    __tablename__ = "vitals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer)
+    heart_rate = Column(Float)
+    temperature = Column(Float)
+    oxygen_level = Column(Float)
