@@ -1,0 +1,84 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+
+# -----------------------------
+# Step 1: Array Manipulation
+# -----------------------------
+arr = np.arange(1, 10).reshape(3, 3)
+print("Array:\n", arr)
+print("Broadcasting example:\n", arr + 10)
+
+# -----------------------------
+# Step 2: Statistics & Random Numbers
+# -----------------------------
+data = np.random.normal(loc=0, scale=1, size=1000)
+print("Mean:", np.mean(data), "Variance:", np.var(data))
+
+plt.hist(data, bins=30, alpha=0.7, label="Random Data")
+plt.legend()
+plt.title("Histogram of Random Data")
+plt.show()
+
+# -----------------------------
+# Step 3: Linear Algebra
+# -----------------------------
+A = np.array([[3, 1], [1, 2]])
+b = np.array([9, 8])
+
+# Solve Ax = b
+x = np.linalg.solve(A, b)
+print("Solution to Ax=b:", x)
+
+# Eigenvalues and eigenvectors
+eigvals, eigvecs = np.linalg.eig(A)
+print("Eigenvalues:", eigvals)
+print("Eigenvectors:\n", eigvecs)
+
+# Singular Value Decomposition
+U, S, Vt = np.linalg.svd(A)
+print("SVD:\nU=\n", U, "\nS=\n", S, "\nVt=\n", Vt)
+
+# -----------------------------
+# Step 4: Signal Processing (FFT)
+# -----------------------------
+t = np.linspace(0, 1, 500)
+signal = np.sin(2*np.pi*50*t) + np.sin(2*np.pi*120*t)
+
+fft_vals = np.fft.fft(signal)
+freqs = np.fft.fftfreq(len(signal), d=t[1]-t[0])
+
+plt.plot(freqs[:250], np.abs(fft_vals)[:250])
+plt.title("FFT Spectrum")
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Amplitude")
+plt.show()
+
+# -----------------------------
+# Step 5: Monte Carlo Simulation
+# -----------------------------
+N = 1000000
+points = np.random.rand(N, 2)
+inside_circle = np.sum(points[:,0]**2 + points[:,1]**2 <= 1)
+pi_estimate = 4 * inside_circle / N
+print("Monte Carlo estimate of π:", pi_estimate)
+
+# -----------------------------
+# Step 6: Performance Profiling
+# -----------------------------
+N = 1000000
+arr = np.random.rand(N)
+
+# Naive Python loop
+start = time.time()
+s = 0
+for val in arr:
+    s += val
+end = time.time()
+print("Loop sum:", s, "Time:", end-start)
+
+# NumPy vectorized sum
+start = time.time()
+s = np.sum(arr)
+end = time.time()
+print("NumPy sum:", s, "Time:", end-start)
