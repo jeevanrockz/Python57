@@ -1,0 +1,95 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Step 1: Setup
+# -----------------------------
+# Factory production capacities
+factories = np.array([100, 150])       
+
+# Warehouse storage capacities
+warehouses = np.array([120, 80])       
+
+# Store demands
+stores = np.array([70, 60, 50])        
+
+# Transport costs: factories → warehouses
+cost_fw = np.array([[2, 3], [4, 1]])   
+
+# Transport costs: warehouses → stores
+cost_ws = np.array([[5, 2, 3], [3, 4, 2]])  
+
+# -----------------------------
+# Step 2: Greedy Allocation
+# -----------------------------
+def allocate(factories, warehouses, stores, cost_fw, cost_ws):
+    allocation_fw = np.zeros_like(cost_fw)
+    allocation_ws = np.zeros_like(cost_ws)
+    
+    # Fill warehouses from cheapest factory routes
+    for w in range(len(warehouses)):
+        cheapest_factory = np.argmin(cost_fw[:,w])
+        units = min(factories[cheapest_factory], warehouses[w])
+        allocation_fw[cheapest_factory, w] = units
+        factories[cheapest_factory] -= units
+        warehouses[w] -= units
+    
+    # Fill stores from cheapest warehouse routes
+    for s in range(len(stores)):
+        cheapest_warehouse = np.argmin(cost_ws[:,s])
+        units = min(stores[s], allocation_fw[:,cheapest_warehouse].sum())
+        allocation_ws[cheapest_warehouse, s] = units
+        stores[s] -= units
+    
+    return allocation_fw, allocation_ws
+
+fw_alloc, ws_alloc = allocate(factories.copy(), warehouses.copy(), stores.copy(), cost_fw, cost_ws)
+
+# -----------------------------
+# Step 3: Cost Calculation
+# -----------------------------
+def calculate_cost(fw_alloc, ws_alloc, cost_fw, cost_ws):
+    return np.sum(fw_alloc * cost_fw) + np.sum(ws_alloc * cost_ws)
+
+total_cost = calculate_cost(fw_alloc, ws_alloc, cost_fw, cost_ws)
+
+print("Factory → Warehouse Allocation:\n", fw_alloc)
+print("Warehouse → Store Allocation:\n", ws_alloc)
+print("Total Cost:", total_cost)
+
+# -----------------------------
+# Step 4: Scenario Simulation
+# -----------------------------
+def simulate_scenarios():
+    demands = [np.array([70, 60, 50]), np.array([100, 80, 60]), np.array([50, 40, 30])]
+    costs = []
+    for demand in demands:
+        fw_alloc, ws_alloc = allocate(factories.copy(), warehouses.copy(), demand.copy(), cost_fw, cost_ws)
+        costs.append(calculate_cost(fw_alloc, ws_alloc, cost_fw, cost_ws))
+    return demands, costs
+
+demands, costs = simulate_scenarios()
+
+# -----------------------------
+# Step 5: Visualization
+# -----------------------------
+plt.figure(figsize=(12,5))
+
+# Heatmap of warehouse → store allocation
+plt.subplot(1,2,1)
+plt.imshow(ws_alloc, cmap="Blues", aspect="auto")
+plt.colorbar(label="Units Allocated")
+plt.title("Warehouse → Store Allocation Heatmap")
+plt.xlabel("Stores")
+plt.ylabel("Warehouses")
+
+# Cost vs demand scenarios
+plt.subplot(1,2,2)
+demand_totals = [d.sum() for d in demands]
+plt.plot(demand_totals, costs, marker="o")
+plt.title("Total Cost vs Demand Scenarios")
+plt.xlabel("Total Store Demand")
+plt.ylabel("Total Cost")
+
+plt.tight_layout()
+plt.show()
