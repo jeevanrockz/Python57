@@ -1,0 +1,99 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+
+# -----------------------------
+# Step 1: Data Setup
+# -----------------------------
+# Ratings matrix: rows = users, columns = items
+# 0 means missing rating
+ratings = np.array([
+    [5, 3, 0, 1],
+    [4, 0, 0, 1],
+    [1, 1, 0, 5],
+    [0, 0, 5, 4],
+    [2, 1, 3, 0]
+], dtype=float)
+
+# -----------------------------
+# Step 2: Similarity Computation
+# -----------------------------
+def cosine_similarity(matrix):
+    """
+    Compute cosine similarity between rows of a matrix.
+    """
+    norm = np.linalg.norm(matrix, axis=1, keepdims=True)
+    normalized = matrix / (norm + 1e-8)
+    return normalized @ normalized.T
+
+user_similarity = cosine_similarity(ratings)
+
+# -----------------------------
+# Step 3: Prediction (User-Based Collaborative Filtering)
+# -----------------------------
+def predict_user_based(ratings, similarity):
+    """
+    Predict missing ratings using user-based collaborative filtering.
+    """
+    mean_user_rating = np.true_divide(ratings.sum(1), (ratings != 0).sum(1))
+    ratings_diff = (ratings - mean_user_rating[:, None]) * (ratings != 0)
+    pred = mean_user_rating[:, None] + similarity @ ratings_diff / (np.abs(similarity).sum(axis=1)[:, None] + 1e-8)
+    return pred
+
+predictions_user = predict_user_based(ratings, user_similarity)
+
+# -----------------------------
+# Step 4: Prediction (Item-Based Collaborative Filtering)
+# -----------------------------
+def predict_item_based(ratings):
+    """
+    Predict missing ratings using item-based collaborative filtering.
+    """
+    item_similarity = cosine_similarity(ratings.T)
+    pred = ratings @ item_similarity / (np.abs(item_similarity).sum(axis=1) + 1e-8)
+    return pred
+
+predictions_item = predict_item_based(ratings)
+
+# -----------------------------
+# Step 5: Evaluation
+# -----------------------------
+def rmse(true, pred):
+    mask = true != 0
+    return np.sqrt(mean_squared_error(true[mask], pred[mask]))
+
+error_user = rmse(ratings, predictions_user)
+error_item = rmse(ratings, predictions_item)
+
+print("User-Based RMSE:", error_user)
+print("Item-Based RMSE:", error_item)
+
+# -----------------------------
+# Step 6: Visualization
+# -----------------------------
+def plot_predictions(predictions, title):
+    plt.imshow(predictions, cmap="coolwarm", aspect="auto")
+    plt.colorbar(label="Predicted Rating")
+    plt.title(title)
+    plt.xlabel("Items")
+    plt.ylabel("Users")
+    plt.show()
+
+plot_predictions(predictions_user, "User-Based Collaborative Filtering Predictions")
+plot_predictions(predictions_item, "Item-Based Collaborative Filtering Predictions")
+
+# -----------------------------
+# Step 7: Modular Testing
+# -----------------------------
+def test_correctness():
+    # Ensure similarity matrix is symmetric
+    sim = cosine_similarity(ratings)
+    assert np.allclose(sim, sim.T), "Similarity matrix not symmetric"
+
+    # Ensure predictions are finite
+    assert np.isfinite(predictions_user).all(), "User-based predictions contain NaN/Inf"
+    assert np.isfinite(predictions_item).all(), "Item-based predictions contain NaN/Inf"
+
+    print("All tests passed!")
+
+test_correctness()
