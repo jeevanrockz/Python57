@@ -1,0 +1,90 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+
+# -----------------------------
+# Step 1: Generate Synthetic Data
+# -----------------------------
+def generate_data(n=200):
+    """
+    Generate synthetic time-series data: noisy sine wave.
+    """
+    t = np.arange(n)
+    signal = np.sin(0.1 * t) + np.random.normal(scale=0.2, size=n)
+    return t, signal
+
+t, data = generate_data()
+
+# -----------------------------
+# Step 2: Moving Average
+# -----------------------------
+def moving_average(data, window=5):
+    """
+    Compute moving average with given window size.
+    """
+    return np.convolve(data, np.ones(window)/window, mode="valid")
+
+ma = moving_average(data, window=10)
+
+# -----------------------------
+# Step 3: Anomaly Detection
+# -----------------------------
+def detect_anomalies(data, threshold=2.0):
+    """
+    Detect anomalies based on deviation from mean.
+    """
+    mean = np.mean(data)
+    std = np.std(data)
+    anomalies = np.where(np.abs(data - mean) > threshold * std)[0]
+    return anomalies
+
+anomalies = detect_anomalies(data)
+
+# -----------------------------
+# Step 4: Forecasting (AR Model)
+# -----------------------------
+def autoregressive_forecast(data, p=5, steps=10):
+    """
+    Simple autoregressive forecasting model.
+    p = number of lag terms
+    steps = number of future predictions
+    """
+    # Build lagged matrix
+    X = np.vstack([data[i:len(data)-p+i] for i in range(p)]).T
+    y = data[p:]
+    coeffs = np.linalg.lstsq(X, y, rcond=None)[0]
+
+    forecast = []
+    history = list(data[-p:])
+    for _ in range(steps):
+        pred = np.dot(coeffs, history[-p:])
+        forecast.append(pred)
+        history.append(pred)
+    return np.array(forecast)
+
+forecast = autoregressive_forecast(data, p=5, steps=20)
+
+# -----------------------------
+# Step 5: Evaluation
+# -----------------------------
+def rmse(true, pred):
+    """
+    Compute Root Mean Square Error.
+    """
+    return np.sqrt(mean_squared_error(true, pred))
+
+# For synthetic data, compare last segment with forecast
+print("Forecast RMSE (synthetic check):", rmse(data[-20:], forecast[:20]))
+
+# -----------------------------
+# Step 6: Visualization
+# -----------------------------
+plt.figure(figsize=(12,6))
+plt.plot(t, data, label="Original Data")
+plt.plot(t[9:], ma, label="Moving Average (10)")
+plt.scatter(t[anomalies], data[anomalies], color="red", label="Anomalies")
+plt.plot(np.arange(len(data), len(data)+len(forecast)), forecast, 
+         label="Forecast", linestyle="--")
+plt.legend()
+plt.title("NumPy Time-Series Analysis & Forecasting")
+plt.show()
