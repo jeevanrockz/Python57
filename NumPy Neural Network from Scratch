@@ -1,0 +1,121 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Step 1: Generate Synthetic Data
+# -----------------------------
+def generate_data(N=1000):
+    # Two-dimensional points
+    X = np.random.randn(N, 2)
+    # Binary labels: 1 if product of coordinates > 0, else 0
+    y = (X[:,0] * X[:,1] > 0).astype(int)
+    return X, y
+
+X, y = generate_data()
+y_onehot = np.eye(2)[y]  # one-hot encoding
+
+# -----------------------------
+# Step 2: Initialize Parameters
+# -----------------------------
+input_dim = 2
+hidden_dim = 16
+output_dim = 2
+
+W1 = np.random.randn(input_dim, hidden_dim) * 0.01
+b1 = np.zeros((1, hidden_dim))
+W2 = np.random.randn(hidden_dim, output_dim) * 0.01
+b2 = np.zeros((1, output_dim))
+
+# -----------------------------
+# Step 3: Activation Functions
+# -----------------------------
+def relu(x): 
+    return np.maximum(0, x)
+
+def relu_deriv(x): 
+    return (x > 0).astype(float)
+
+def softmax(x): 
+    exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return exp_x / np.sum(exp_x, axis=1, keepdims=True)
+
+# -----------------------------
+# Step 4: Forward Propagation
+# -----------------------------
+def forward(X):
+    z1 = X @ W1 + b1
+    a1 = relu(z1)
+    z2 = a1 @ W2 + b2
+    a2 = softmax(z2)
+    return z1, a1, z2, a2
+
+# -----------------------------
+# Step 5: Loss Function
+# -----------------------------
+def cross_entropy(y_true, y_pred):
+    return -np.mean(np.sum(y_true * np.log(y_pred + 1e-9), axis=1))
+
+# -----------------------------
+# Step 6: Backpropagation
+# -----------------------------
+def backward(X, y_true, z1, a1, a2):
+    m = X.shape[0]
+    dz2 = a2 - y_true
+    dW2 = a1.T @ dz2 / m
+    db2 = np.sum(dz2, axis=0, keepdims=True) / m
+    
+    dz1 = (dz2 @ W2.T) * relu_deriv(z1)
+    dW1 = X.T @ dz1 / m
+    db1 = np.sum(dz1, axis=0, keepdims=True) / m
+    
+    return dW1, db1, dW2, db2
+
+# -----------------------------
+# Step 7: Training Loop
+# -----------------------------
+lr = 0.1
+epochs = 100
+losses = []
+accuracies = []
+
+for epoch in range(epochs):
+    z1, a1, z2, a2 = forward(X)
+    loss = cross_entropy(y_onehot, a2)
+    losses.append(loss)
+    
+    dW1, db1, dW2, db2 = backward(X, y_onehot, z1, a1, a2)
+    
+    # Update parameters
+    W1 -= lr * dW1
+    b1 -= lr * db1
+    W2 -= lr * dW2
+    b2 -= lr * db2
+    
+    preds = np.argmax(a2, axis=1)
+    acc = np.mean(preds == y)
+    accuracies.append(acc)
+    
+    if epoch % 10 == 0:
+        print(f"Epoch {epoch}, Loss: {loss:.4f}, Accuracy: {acc:.4f}")
+
+# -----------------------------
+# Step 8: Visualization
+# -----------------------------
+plt.figure(figsize=(12,5))
+
+plt.subplot(1,2,1)
+plt.plot(losses, label="Loss")
+plt.title("Training Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+
+plt.subplot(1,2,2)
+plt.plot(accuracies, label="Accuracy", color="green")
+plt.title("Training Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+
+plt.tight_layout()
+plt.show()
