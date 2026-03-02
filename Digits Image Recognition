@@ -1,0 +1,64 @@
+# -----------------------------
+# 1. Import Libraries
+# -----------------------------
+from sklearn.datasets import load_digits
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# 2. Load Dataset
+# -----------------------------
+digits = load_digits()
+X, y = digits.data, digits.target
+
+print("Dataset shape:", X.shape)
+print("Number of samples:", len(y))
+
+# -----------------------------
+# 3. Train/Test Split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)
+
+# -----------------------------
+# 4. Train Multiple Models
+# -----------------------------
+# Logistic Regression
+log_reg = LogisticRegression(max_iter=2000)
+log_reg.fit(X_train, y_train)
+y_pred_lr = log_reg.predict(X_test)
+
+# Support Vector Machine
+svm = SVC(kernel='linear')
+svm.fit(X_train, y_train)
+y_pred_svm = svm.predict(X_test)
+
+# Random Forest
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+y_pred_rf = rf.predict(X_test)
+
+# -----------------------------
+# 5. Evaluate Models
+# -----------------------------
+print("Logistic Regression Accuracy:", accuracy_score(y_test, y_pred_lr))
+print("SVM Accuracy:", accuracy_score(y_test, y_pred_svm))
+print("Random Forest Accuracy:", accuracy_score(y_test, y_pred_rf))
+
+print("\nClassification Report (Logistic Regression):\n", classification_report(y_test, y_pred_lr))
+print("Confusion Matrix (Logistic Regression):\n", confusion_matrix(y_test, y_pred_lr))
+
+# -----------------------------
+# 6. Visualize Predictions
+# -----------------------------
+fig, axes = plt.subplots(1, 5, figsize=(10, 3))
+for ax, image, label, pred in zip(axes, X_test[:5], y_test[:5], y_pred_lr[:5]):
+    ax.imshow(image.reshape(8, 8), cmap=plt.cm.gray_r)
+    ax.set_title(f"True: {label}\nPred: {pred}")
+    ax.axis("off")
+plt.show()
