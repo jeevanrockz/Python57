@@ -1,0 +1,104 @@
+# -----------------------------
+# 1. Import Libraries
+# -----------------------------
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve, precision_recall_curve
+
+# -----------------------------
+# 2. Generate Synthetic Dataset
+# -----------------------------
+np.random.seed(42)
+n_samples = 2000
+
+data = pd.DataFrame({
+    "Age": np.random.randint(21, 65, n_samples),
+    "Income": np.random.randint(20000, 120000, n_samples),
+    "LoanAmount": np.random.randint(1000, 50000, n_samples),
+    "LoanTerm": np.random.choice([12, 24, 36, 48, 60], n_samples),
+    "CreditScore": np.random.randint(300, 850, n_samples),
+    "EmploymentStatus": np.random.choice(["Employed", "Self-employed", "Unemployed"], n_samples),
+    "Default": np.random.choice([0, 1], n_samples, p=[0.85, 0.15])  # imbalanced
+})
+
+X = data.drop("Default", axis=1)
+y = data["Default"]
+
+# -----------------------------
+# 3. Preprocessing
+# -----------------------------
+numeric_features = ["Age", "Income", "LoanAmount", "LoanTerm", "CreditScore"]
+categorical_features = ["EmploymentStatus"]
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", StandardScaler(), numeric_features),
+        ("cat", OneHotEncoder(), categorical_features)
+    ]
+)
+
+# -----------------------------
+# 4. Train/Test Split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)
+
+# -----------------------------
+# 5. Train Models
+# -----------------------------
+models = {
+    "Logistic Regression": LogisticRegression(max_iter=1000, class_weight="balanced"),
+    "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42, class_weight="balanced"),
+    "Gradient Boosting": GradientBoostingClassifier(n_estimators=200, random_state=42)
+}
+
+results = {}
+
+for name, model in models.items():
+    pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", model)])
+    pipeline.fit(X_train, y_train)
+    y_pred = pipeline.predict(X_test)
+    y_prob = pipeline.predict_proba(X_test)[:,1]
+    
+    print(f"\n{name} Performance:")
+    print(classification_report(y_test, y_pred))
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print("ROC-AUC:", roc_auc_score(y_test, y_prob))
+    
+    results[name] = (y_test, y_prob)
+
+# -----------------------------
+# 6. Visualization (ROC + PR Curves)
+# -----------------------------
+plt.figure(figsize=(12,5))
+
+# ROC Curves
+plt.subplot(1,2,1)
+for name, (y_true, y_prob) in results.items():
+    fpr, tpr, _ = roc_curve(y_true, y_prob)
+    plt.plot(fpr, tpr, label=name)
+plt.plot([0,1],[0,1],"--",color="gray")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curves")
+plt.legend()
+
+# Precision-Recall Curves
+plt.subplot(1,2,2)
+for name, (y_true, y_prob) in results.items():
+    precision, recall, _ = precision_recall_curve(y_true, y_prob)
+    plt.plot(recall, precision, label=name)
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.title("Precision-Recall Curves")
+plt.legend()
+
+plt.show()
