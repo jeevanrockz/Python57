@@ -1,0 +1,91 @@
+# -----------------------------
+# 1. Import Libraries
+# -----------------------------
+import pandas as pd
+import numpy as np
+from sklearn.datasets import fetch_california_housing
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# 2. Load Dataset
+# -----------------------------
+housing = fetch_california_housing(as_frame=True)
+df = housing.frame
+
+print("Dataset shape:", df.shape)
+print(df.head())
+
+X = df.drop("MedHouseVal", axis=1)
+y = df["MedHouseVal"]
+
+# -----------------------------
+# 3. Preprocessing
+# -----------------------------
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Optional: Polynomial Features (non-linear relationships)
+poly = PolynomialFeatures(degree=2, include_bias=False)
+X_poly = poly.fit_transform(X_scaled)
+
+# -----------------------------
+# 4. Train/Test Split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.25, random_state=42
+)
+
+# -----------------------------
+# 5. Train Models
+# -----------------------------
+# Linear Regression
+lr = LinearRegression()
+lr.fit(X_train, y_train)
+y_pred_lr = lr.predict(X_test)
+
+# Random Forest
+rf = RandomForestRegressor(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+y_pred_rf = rf.predict(X_test)
+
+# Gradient Boosting
+gb = GradientBoostingRegressor(n_estimators=200, random_state=42)
+gb.fit(X_train, y_train)
+y_pred_gb = gb.predict(X_test)
+
+# -----------------------------
+# 6. Evaluation Function
+# -----------------------------
+def evaluate_model(name, y_true, y_pred):
+    print(f"\n{name} Performance:")
+    print("MSE:", mean_squared_error(y_true, y_pred))
+    print("MAE:", mean_absolute_error(y_true, y_pred))
+    print("R²:", r2_score(y_true, y_pred))
+
+evaluate_model("Linear Regression", y_test, y_pred_lr)
+evaluate_model("Random Forest", y_test, y_pred_rf)
+evaluate_model("Gradient Boosting", y_test, y_pred_gb)
+
+# -----------------------------
+# 7. Visualization
+# -----------------------------
+# Predicted vs Actual (Random Forest)
+plt.figure(figsize=(8,6))
+plt.scatter(y_test, y_pred_rf, alpha=0.5)
+plt.xlabel("Actual Prices")
+plt.ylabel("Predicted Prices")
+plt.title("Random Forest: Actual vs Predicted House Prices")
+plt.show()
+
+# Feature importance (Random Forest)
+importances = rf.feature_importances_
+features = housing.feature_names
+plt.figure(figsize=(10,6))
+plt.barh(features, importances)
+plt.title("Feature Importance (Random Forest)")
+plt.show()
