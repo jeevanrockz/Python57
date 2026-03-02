@@ -1,0 +1,49 @@
+# -----------------------------
+# 1. Import Libraries
+# -----------------------------
+import numpy as np
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+
+# -----------------------------
+# 2. Synthetic Dataset
+# -----------------------------
+documents = [
+    "The stock market crashed due to inflation concerns",
+    "The football team won the championship after a tough season",
+    "New advances in AI are transforming healthcare",
+    "The government passed new environmental regulations",
+    "Basketball players train hard to improve their performance",
+    "Doctors are using machine learning to detect diseases",
+    "Climate change policies are debated in parliament",
+    "The soccer match ended in a thrilling draw"
+]
+
+# -----------------------------
+# 3. TF-IDF Vectorization
+# -----------------------------
+vectorizer = TfidfVectorizer(stop_words="english")
+X = vectorizer.fit_transform(documents)
+
+# -----------------------------
+# 4. Topic Modeling (LDA)
+# -----------------------------
+lda = LatentDirichletAllocation(n_components=3, random_state=42)
+lda.fit(X)
+
+# -----------------------------
+# 5. Display Topics
+# -----------------------------
+def display_topics(model, feature_names, no_top_words):
+    for topic_idx, topic in enumerate(model.components_):
+        top_words = [feature_names[i] for i in topic.argsort()[:-no_top_words - 1:-1]]
+        print(f"Topic {topic_idx}: {', '.join(top_words)}")
+
+display_topics(lda, vectorizer.get_feature_names_out(), 5)
+
+# -----------------------------
+# 6. Document-Topic Distribution
+# -----------------------------
+doc_topic_dist = lda.transform(X)
+print("\nDocument-Topic Distribution:\n", doc_topic_dist)
