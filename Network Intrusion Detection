@@ -1,0 +1,73 @@
+# -----------------------------
+# 1. Import Libraries
+# -----------------------------
+import numpy as np
+import pandas as pd
+from sklearn.datasets import make_blobs
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
+from sklearn.neighbors import LocalOutlierFactor
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# -----------------------------
+# 2. Generate Synthetic Network Data
+# -----------------------------
+# Normal traffic (clustered points)
+X, _ = make_blobs(n_samples=1000, centers=1, cluster_std=1.0, random_state=42)
+
+# Add anomalies (random scattered points)
+rng = np.random.RandomState(42)
+X_outliers = rng.uniform(low=-6, high=6, size=(50, 2))
+X = np.vstack([X, X_outliers])
+
+# -----------------------------
+# 3. Preprocessing
+# -----------------------------
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Optional: Dimensionality Reduction (PCA)
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+
+# -----------------------------
+# 4. Models
+# -----------------------------
+# Isolation Forest
+iso = IsolationForest(contamination=0.05, random_state=42)
+y_pred_iso = iso.fit_predict(X_scaled)
+
+# One-Class SVM
+svm = OneClassSVM(nu=0.05, kernel="rbf", gamma=0.1)
+y_pred_svm = svm.fit_predict(X_scaled)
+
+# Local Outlier Factor
+lof = LocalOutlierFactor(n_neighbors=20, contamination=0.05)
+y_pred_lof = lof.fit_predict(X_scaled)
+
+# -----------------------------
+# 5. Visualization
+# -----------------------------
+plt.figure(figsize=(10,6))
+plt.scatter(X_scaled[:,0], X_scaled[:,1], c=y_pred_iso, cmap="coolwarm", alpha=0.6)
+plt.title("Isolation Forest Anomaly Detection")
+plt.xlabel("Feature 1")
+plt.ylabel("Feature 2")
+plt.show()
+
+plt.figure(figsize=(10,6))
+plt.scatter(X_scaled[:,0], X_scaled[:,1], c=y_pred_svm, cmap="coolwarm", alpha=0.6)
+plt.title("One-Class SVM Anomaly Detection")
+plt.xlabel("Feature 1")
+plt.ylabel("Feature 2")
+plt.show()
+
+plt.figure(figsize=(10,6))
+plt.scatter(X_scaled[:,0], X_scaled[:,1], c=y_pred_lof, cmap="coolwarm", alpha=0.6)
+plt.title("Local Outlier Factor Anomaly Detection")
+plt.xlabel("Feature 1")
+plt.ylabel("Feature 2")
+plt.show()
