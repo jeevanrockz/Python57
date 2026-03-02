@@ -1,0 +1,79 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from imblearn.over_sampling import SMOTE  # for handling imbalance
+
+# -----------------------------
+# 1. Simulated Transaction Dataset
+# -----------------------------
+n_samples = 5000
+data = {
+    "amount": np.random.uniform(1, 5000, n_samples),
+    "time": np.random.randint(0, 86400, n_samples),  # seconds in a day
+    "merchant_type": np.random.choice([0, 1, 2, 3], n_samples),  # categorical encoded
+    "location": np.random.choice([0, 1, 2], n_samples),
+    "device_type": np.random.choice([0, 1], n_samples),
+    "fraud": np.random.choice([0, 1], n_samples, p=[0.95, 0.05])  # imbalanced
+}
+
+df = pd.DataFrame(data)
+
+# -----------------------------
+# 2. Features & Target
+# -----------------------------
+X = df.drop("fraud", axis=1)
+y = df["fraud"]
+
+# Handle imbalance with SMOTE
+smote = SMOTE(random_state=42)
+X_resampled, y_resampled = smote.fit_resample(X, y)
+
+# -----------------------------
+# 3. Train/Test Split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X_resampled, y_resampled, test_size=0.25, random_state=42, stratify=y_resampled
+)
+
+# -----------------------------
+# 4. Model Training
+# -----------------------------
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+model = RandomForestClassifier(n_estimators=200, random_state=42, class_weight="balanced")
+model.fit(X_train_scaled, y_train)
+
+# -----------------------------
+# 5. Evaluation
+# -----------------------------
+y_pred = model.predict(X_test_scaled)
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("ROC-AUC:", roc_auc_score(y_test, model.predict_proba(X_test_scaled)[:, 1]))
+
+# Cross-validation
+scores = cross_val_score(model, X_resampled, y_resampled, cv=5, scoring="roc_auc")
+print("Cross-validated ROC-AUC scores:", scores)
+print("Mean ROC-AUC:", scores.mean())
+
+# -----------------------------
+# 6. Real-Time Transaction Simulation
+# -----------------------------
+new_transaction = pd.DataFrame({
+    "amount": [1200.50],
+    "time": [45000],  # 12:30 PM
+    "merchant_type": [2],
+    "location": [1],
+    "device_type": [0]
+})
+
+new_scaled = scaler.transform(new_transaction)
+fraud_pred = model.predict(new_scaled)[0]
+fraud_prob = model.predict_proba(new_scaled)[0][1]
+
+print(f"Fraud Prediction: {fraud_pred}, Probability: {fraud_prob:.3f}")
