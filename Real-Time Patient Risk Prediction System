@@ -1,0 +1,86 @@
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.decomposition import PCA
+
+# -----------------------------
+# 1. Simulated Streaming Dataset
+# -----------------------------
+# Imagine vitals arriving in real-time (simulated here)
+n_samples = 5000
+data = {
+    "heart_rate": np.random.randint(50, 150, n_samples),
+    "blood_pressure": np.random.randint(80, 180, n_samples),
+    "oxygen_saturation": np.random.randint(70, 100, n_samples),
+    "glucose": np.random.randint(60, 250, n_samples),
+    "resp_rate": np.random.randint(10, 30, n_samples),
+    "critical_event": np.random.choice([0, 1], n_samples, p=[0.8, 0.2])
+}
+
+df = pd.DataFrame(data)
+
+# -----------------------------
+# 2. Feature Engineering
+# -----------------------------
+# Add rolling averages & rate of change to mimic real-time signals
+df["hr_change"] = df["heart_rate"].diff().fillna(0)
+df["bp_change"] = df["blood_pressure"].diff().fillna(0)
+df["ox_change"] = df["oxygen_saturation"].diff().fillna(0)
+
+# -----------------------------
+# 3. Train/Test Split
+# -----------------------------
+X = df.drop("critical_event", axis=1)
+y = df["critical_event"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)
+
+# -----------------------------
+# 4. Build Pipeline
+# -----------------------------
+# Standardize → Dimensionality Reduction → Gradient Boosting
+pipeline = Pipeline([
+    ("scaler", StandardScaler()),
+    ("pca", PCA(n_components=5)),
+    ("gb", GradientBoostingClassifier(n_estimators=200, learning_rate=0.05))
+])
+
+# -----------------------------
+# 5. Train & Evaluate
+# -----------------------------
+pipeline.fit(X_train, y_train)
+
+y_pred = pipeline.predict(X_test)
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+# Cross-validation for robustness
+scores = cross_val_score(pipeline, X, y, cv=5, scoring="roc_auc")
+print("Cross-validated ROC-AUC scores:", scores)
+print("Mean ROC-AUC:", scores.mean())
+
+# -----------------------------
+# 6. Real-Time Prediction Simulation
+# -----------------------------
+# Simulate new patient data arriving
+new_patient = pd.DataFrame({
+    "heart_rate": [110],
+    "blood_pressure": [140],
+    "oxygen_saturation": [85],
+    "glucose": [180],
+    "resp_rate": [22],
+    "hr_change": [5],
+    "bp_change": [10],
+    "ox_change": [-3]
+})
+
+risk_pred = pipeline.predict(new_patient)[0]
+risk_prob = pipeline.predict_proba(new_patient)[0][1]
+
+print(f"Predicted Risk: {risk_pred}, Probability: {risk_prob:.3f}")
