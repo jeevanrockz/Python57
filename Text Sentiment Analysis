@@ -1,0 +1,57 @@
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+
+# -----------------------------
+# 1. Load Dataset
+# -----------------------------
+# Choose two categories to simulate sentiment-like classification
+categories = ['rec.sport.hockey', 'sci.space']
+newsgroups = fetch_20newsgroups(subset='all', categories=categories, remove=('headers','footers','quotes'))
+
+X = newsgroups.data
+y = newsgroups.target   # 0 = hockey, 1 = space
+
+# -----------------------------
+# 2. Train/Test Split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)
+
+# -----------------------------
+# 3. TF-IDF Vectorization
+# -----------------------------
+vectorizer = TfidfVectorizer(stop_words="english", max_features=20000)
+X_train_tfidf = vectorizer.fit_transform(X_train)
+X_test_tfidf = vectorizer.transform(X_test)
+
+# -----------------------------
+# 4. Train Model
+# -----------------------------
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train_tfidf, y_train)
+
+# -----------------------------
+# 5. Evaluate
+# -----------------------------
+y_pred = model.predict(X_test_tfidf)
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+# -----------------------------
+# 6. Predict New Texts
+# -----------------------------
+new_texts = [
+    "The team played an incredible hockey match last night!",
+    "Astronauts are preparing for a new mission to Mars."
+]
+
+new_tfidf = vectorizer.transform(new_texts)
+predictions = model.predict(new_tfidf)
+
+for text, pred in zip(new_texts, predictions):
+    label = categories[pred]
+    print(f"Text: '{text}' --> Predicted Category: {label}")
