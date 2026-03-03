@@ -1,0 +1,160 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+# Player statistics
+players = ["Messi", "Ronaldo", "Neymar", "Mbappe"]
+player_stats = pd.DataFrame({
+    "player": players,
+    "goals": [30, 28, 20, 25],
+    "assists": [12, 10, 15, 14],
+    "tackles": [5, 7, 8, 6],
+    "passing_accuracy": [0.88, 0.85, 0.82, 0.86]
+})
+
+# Match statistics
+matches = pd.DataFrame({
+    "match": [f"Match {i}" for i in range(1, 6)],
+    "team": ["Team A", "Team B", "Team A", "Team B", "Team A"],
+    "possession": [55, 48, 60, 52, 50],
+    "shots": [12, 10, 15, 8, 11],
+    "goals": [2, 1, 3, 0, 1]
+})
+
+# League standings progression
+weeks = list(range(1, 11))
+standings = pd.DataFrame({
+    "week": weeks * 2,
+    "team": ["Team A"]*10 + ["Team B"]*10,
+    "points": [i*2 for i in range(10)] + [i*1.5 for i in range(10)]
+})
+
+# Goals vs Assists scatter
+scatter_df = player_stats[["player", "goals", "assists"]]
+
+# Heatmap (synthetic player activity zones)
+heatmap_data = np.random.rand(10, 10)
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Soccer Analytics Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("⚽ Soccer Analytics Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Match Overview", children=[
+            dcc.Graph(id="match-bar"),
+            dcc.Graph(id="standings-line"),
+            dcc.Graph(id="results-table"),
+        ]),
+        dcc.Tab(label="Player Analysis", children=[
+            dcc.Dropdown(
+                id="player-filter",
+                options=[{"label": p, "value": p} for p in players],
+                value="Messi",
+                clearable=False
+            ),
+            dcc.Graph(id="radar-chart"),
+            dcc.Graph(id="heatmap"),
+        ]),
+        dcc.Tab(label="League Stats", children=[
+            dcc.Graph(id="scatter-goals-assists"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+# Match bar chart
+@app.callback(
+    Output("match-bar", "figure"),
+    Input("match-bar", "id")  # dummy input
+)
+def update_match_bar(_):
+    fig = px.bar(matches, x="match", y="possession", color="team",
+                 title="Team Possession per Match")
+    return fig
+
+# Standings line chart
+@app.callback(
+    Output("standings-line", "figure"),
+    Input("standings-line", "id")  # dummy input
+)
+def update_standings(_):
+    fig = px.line(standings, x="week", y="points", color="team",
+                  title="League Standings Progression")
+    return fig
+
+# Results table
+@app.callback(
+    Output("results-table", "figure"),
+    Input("results-table", "id")  # dummy input
+)
+def update_table(_):
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(matches.columns)),
+        cells=dict(values=[matches[c] for c in matches.columns])
+    )])
+    fig.update_layout(title="Match Results Table")
+    return fig
+
+# Radar chart for player stats
+@app.callback(
+    Output("radar-chart", "figure"),
+    Input("player-filter", "value")
+)
+def update_radar(player):
+    row = player_stats[player_stats["player"] == player].iloc[0]
+    categories = ["goals", "assists", "tackles", "passing_accuracy"]
+    values = [row[c] for c in categories]
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill="toself",
+        name=player
+    ))
+    fig.update_layout(title=f"{player} Performance Radar", polar=dict(radialaxis=dict(visible=True)))
+    return fig
+
+# Heatmap for player activity
+@app.callback(
+    Output("heatmap", "figure"),
+    Input("player-filter", "value")
+)
+def update_heatmap(player):
+    fig = px.imshow(heatmap_data, color_continuous_scale="Blues",
+                    title=f"{player} Activity Heatmap")
+    return fig
+
+# Scatter plot goals vs assists
+@app.callback(
+    Output("scatter-goals-assists", "figure"),
+    Input("scatter-goals-assists", "id")  # dummy input
+)
+def update_scatter(_):
+    fig = px.scatter(scatter_df, x="goals", y="assists", text="player",
+                     title="Goals vs Assists for Top Players")
+    fig.update_traces(textposition="top center")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
