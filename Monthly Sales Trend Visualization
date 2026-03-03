@@ -1,0 +1,28 @@
+import matplotlib.pyplot as plt
+
+# Sample monthly sales data (in thousands)
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+sales = [50, 55, 60, 58, 70, 65, 80, 85, 78, 90, 95, 100]
+
+# Create the plot
+plt.figure(figsize=(10,6))
+plt.plot(months, sales, marker='o', color='blue', linewidth=2)
+
+# Add labels and title
+plt.xlabel("Months")
+plt.ylabel("Sales (in $1000s)")
+plt.title("Monthly Sales Trend")
+
+# Highlight max and min sales
+max_sales = max(sales)
+min_sales = min(sales)
+plt.scatter(months[sales.index(max_sales)], max_sales, color='green', s=100, label="Max Sales")
+plt.scatter(months[sales.index(min_sales)], min_sales, color='red', s=100, label="Min Sales")
+
+# Add grid and legend
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend()
+
+# Show the plot
+plt.show()
