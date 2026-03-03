@@ -1,0 +1,52 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated patient dataset
+np.random.seed(42)
+n = 500
+data = pd.DataFrame({
+    "Gender": np.random.choice(["Male", "Female"], n),
+    "AgeGroup": np.random.choice(["18-30", "31-45", "46-60", "61+"], n),
+    "Diabetes": np.random.choice(["Yes", "No"], n, p=[0.3, 0.7]),
+    "Age": np.random.randint(18, 80, n),
+    "BMI": np.random.normal(25, 5, n),
+    "BloodPressure": np.random.normal(120, 15, n),
+    "Cholesterol": np.random.normal(200, 30, n)
+})
+
+# Create dashboard with 2x3 subplots
+fig, axs = plt.subplots(2, 3, figsize=(18,10))
+
+# 1. Bar plot: Average blood pressure by diabetes status
+sns.barplot(x="Diabetes", y="BloodPressure", data=data, estimator=np.mean, ax=axs[0,0])
+axs[0,0].set_title("Average Blood Pressure by Diabetes Status")
+
+# 2. Box plot: BMI distribution across age groups
+sns.boxplot(x="AgeGroup", y="BMI", data=data, ax=axs[0,1])
+axs[0,1].set_title("BMI Distribution by Age Group")
+
+# 3. Violin plot: Cholesterol distribution across gender
+sns.violinplot(x="Gender", y="Cholesterol", data=data, ax=axs[0,2])
+axs[0,2].set_title("Cholesterol Distribution by Gender")
+
+# 4. Histogram: Age distribution
+sns.histplot(data["Age"], bins=15, kde=True, ax=axs[1,0], color="skyblue")
+axs[1,0].set_title("Age Distribution of Patients")
+
+# 5. Regression plot: BMI vs Blood Pressure
+sns.regplot(x="BMI", y="BloodPressure", data=data, ax=axs[1,1], scatter_kws={"alpha":0.6})
+axs[1,1].set_title("BMI vs Blood Pressure (Regression)")
+
+# 6. Heatmap: Correlation matrix
+corr = data[["Age", "BMI", "BloodPressure", "Cholesterol"]].corr()
+sns.heatmap(corr, annot=True, cmap="coolwarm", ax=axs[1,2])
+axs[1,2].set_title("Correlation Matrix of Health Metrics")
+
+# Adjust layout
+plt.tight_layout()
+plt.suptitle("Patient Health Analytics Dashboard (Seaborn)", fontsize=18, y=1.05)
+
+# Show dashboard
+plt.show()
