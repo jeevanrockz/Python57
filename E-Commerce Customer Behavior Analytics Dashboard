@@ -1,0 +1,71 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated e-commerce dataset
+np.random.seed(42)
+n = 1000
+data = pd.DataFrame({
+    "CustomerID": [f"C{i}" for i in range(n)],
+    "Gender": np.random.choice(["Male", "Female"], n),
+    "AgeGroup": np.random.choice(["18-25", "26-35", "36-45", "46-60", "60+"], n),
+    "Region": np.random.choice(["North", "South", "East", "West"], n),
+    "Category": np.random.choice(["Electronics", "Clothing", "Groceries", "Books", "Furniture"], n),
+    "PurchaseAmount": np.random.normal(200, 50, n),
+    "BrowsingTime": np.random.normal(15, 5, n),  # minutes
+    "Satisfaction": np.random.randint(1, 6, n)   # 1–5 scale
+})
+
+# 1. CountPlot: Number of purchases by category
+plt.figure(figsize=(8,6))
+sns.countplot(x="Category", hue="Category", data=data, palette="Set2", legend=False)
+plt.title("Number of Purchases by Product Category")
+plt.show()
+
+# 2. Box Plot: Purchase amount distribution across age groups
+plt.figure(figsize=(10,6))
+sns.boxplot(x="AgeGroup", y="PurchaseAmount", hue="AgeGroup", data=data, palette="Set3", legend=False)
+plt.title("Purchase Amount Distribution by Age Group")
+plt.show()
+
+# 3. Violin Plot: Browsing time distribution across genders
+plt.figure(figsize=(8,6))
+sns.violinplot(x="Gender", y="BrowsingTime", hue="Gender", data=data, palette="muted", legend=False)
+plt.title("Browsing Time Distribution by Gender")
+plt.show()
+
+# 4. StripPlot: Satisfaction scores across categories
+plt.figure(figsize=(10,6))
+sns.stripplot(x="Category", y="Satisfaction", hue="Category", data=data, jitter=True, alpha=0.6, palette="Set1", legend=False)
+plt.title("Customer Satisfaction Across Categories (Strip Plot)")
+plt.show()
+
+# 5. LMPlot: Browsing time vs purchase amount regression
+sns.lmplot(x="BrowsingTime", y="PurchaseAmount", hue="Gender", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Browsing Time vs Purchase Amount (Regression by Gender)")
+plt.show()
+
+# 6. PairPlot: Relationships between purchase amount, browsing time, and satisfaction
+sns.pairplot(data[["PurchaseAmount", "BrowsingTime", "Satisfaction"]], diag_kind="kde")
+plt.suptitle("Pairwise Relationships of Purchase Amount, Browsing Time, and Satisfaction", y=1.02)
+plt.show()
+
+# 7. Heatmap: Correlation matrix of numerical metrics
+corr = data[["PurchaseAmount", "BrowsingTime", "Satisfaction"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Customer Metrics")
+plt.show()
+
+# 8. FacetGrid: Purchase amount distribution by region
+g = sns.FacetGrid(data, col="Region", height=4, aspect=1.2)
+g.map_dataframe(sns.histplot, x="PurchaseAmount", bins=20, color="skyblue")
+plt.suptitle("Purchase Amount Distribution by Region", y=1.05)
+plt.show()
+
+# 9. SwarmPlot: Satisfaction distribution across age groups
+plt.figure(figsize=(10,6))
+sns.swarmplot(x="AgeGroup", y="Satisfaction", hue="AgeGroup", data=data, palette="Set2", legend=False, size=3)
+plt.title("Customer Satisfaction Distribution Across Age Groups (Swarm Plot)")
+plt.show()
