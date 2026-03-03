@@ -1,0 +1,132 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+# Traffic volume by road segment and time of day
+road_segments = ["Highway 1", "Main St", "Broadway", "Airport Rd", "Ring Rd"]
+hours = list(range(0, 24))
+traffic_data = pd.DataFrame({
+    "road": np.random.choice(road_segments, 200),
+    "hour": np.random.choice(hours, 200),
+    "volume": np.random.randint(50, 500, 200),
+    "speed": np.random.uniform(20, 80, 200),
+    "congestion_index": np.random.uniform(0.2, 1.0, 200)
+})
+
+# Public transport ridership
+transport_modes = ["Bus", "Metro", "Tram"]
+ridership = pd.DataFrame({
+    "mode": transport_modes,
+    "ridership": [12000, 25000, 8000]
+})
+
+# Commuter demographics
+commuter_modes = ["Car", "Bike", "Bus", "Metro", "Walking"]
+commuter_share = pd.DataFrame({
+    "mode": commuter_modes,
+    "share": [40, 10, 20, 25, 5]
+})
+
+# Accident statistics
+accidents = pd.DataFrame({
+    "location": ["Zone A", "Zone B", "Zone C", "Zone D"],
+    "severity": ["High", "Medium", "Low", "Medium"],
+    "count": [15, 30, 10, 20],
+    "lat": [17.385, 17.395, 17.405, 17.415],
+    "lon": [78.486, 78.496, 78.506, 78.516]
+})
+
+# Travel time distribution
+travel_times = pd.DataFrame({
+    "mode": np.random.choice(commuter_modes, 100),
+    "time": np.random.randint(10, 60, 100)
+})
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Urban Traffic & Mobility Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🚦 Urban Traffic & Mobility Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Traffic Analysis", children=[
+            dcc.Dropdown(
+                id="road-filter",
+                options=[{"label": r, "value": r} for r in road_segments],
+                value="Highway 1",
+                clearable=False
+            ),
+            dcc.Graph(id="traffic-line"),
+            dcc.Graph(id="speed-scatter"),
+        ]),
+        dcc.Tab(label="Public Transport", children=[
+            dcc.Graph(id="ridership-bar"),
+            dcc.Graph(id="commuter-pie"),
+        ]),
+        dcc.Tab(label="Accident Hotspots", children=[
+            dcc.Graph(id="accident-map"),
+        ]),
+        dcc.Tab(label="Commuter Behavior", children=[
+            dcc.Graph(id="travel-boxplot"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("traffic-line", "figure"), Input("road-filter", "value"))
+def update_traffic_line(road):
+    df = traffic_data[traffic_data["road"] == road]
+    fig = px.line(df, x="hour", y="volume", title=f"Traffic Volume Trend - {road}")
+    return fig
+
+@app.callback(Output("speed-scatter", "figure"), Input("road-filter", "value"))
+def update_speed_scatter(road):
+    df = traffic_data[traffic_data["road"] == road]
+    fig = px.scatter(df, x="speed", y="congestion_index", size="volume",
+                     title=f"Speed vs Congestion - {road}")
+    return fig
+
+@app.callback(Output("ridership-bar", "figure"), Input("ridership-bar", "id"))
+def update_ridership(_):
+    fig = px.bar(ridership, x="mode", y="ridership", title="Public Transport Ridership")
+    return fig
+
+@app.callback(Output("commuter-pie", "figure"), Input("commuter-pie", "id"))
+def update_commuter_pie(_):
+    fig = px.pie(commuter_share, names="mode", values="share", title="Commuter Mode Share")
+    return fig
+
+@app.callback(Output("accident-map", "figure"), Input("accident-map", "id"))
+def update_accident_map(_):
+    fig = px.scatter_mapbox(accidents, lat="lat", lon="lon", size="count",
+                            color="severity", hover_name="location",
+                            zoom=10, mapbox_style="carto-positron",
+                            title="Accident Hotspots")
+    return fig
+
+@app.callback(Output("travel-boxplot", "figure"), Input("travel-boxplot", "id"))
+def update_travel_boxplot(_):
+    fig = px.box(travel_times, x="mode", y="time", title="Travel Time Distribution by Mode")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
