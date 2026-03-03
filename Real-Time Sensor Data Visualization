@@ -1,0 +1,32 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated website traffic data
+np.random.seed(42)
+days = pd.date_range(start="2026-02-01", end="2026-02-28")  # February 2026
+traffic = np.random.randint(200, 1000, size=len(days))      # daily visits between 200–1000
+
+# Create plot
+plt.figure(figsize=(12,6))
+plt.plot(days, traffic, marker='o', color='blue', linewidth=2)
+
+# Add labels and title
+plt.xlabel("Date")
+plt.ylabel("Daily Visits")
+plt.title("Website Traffic Time Series (Feb 2026)")
+
+# Annotate special events
+plt.annotate("Marketing Campaign", xy=(days[10], traffic[10]), 
+             xytext=(days[10], traffic[10]+200),
+             arrowprops=dict(facecolor='green', shrink=0.05))
+
+plt.annotate("Server Downtime", xy=(days[20], traffic[20]), 
+             xytext=(days[20], traffic[20]-300),
+             arrowprops=dict(facecolor='red', shrink=0.05))
+
+# Add grid
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# Show plot
+plt.show()
