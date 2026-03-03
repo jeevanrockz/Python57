@@ -1,0 +1,173 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+# Generate synthetic stock data
+dates = pd.date_range(start="2020-01-01", end="2020-12-31", freq="D")
+companies = ["Apple", "Microsoft", "Tesla", "Amazon"]
+
+stock_data = []
+np.random.seed(42)
+
+for company in companies:
+    price = 100 + np.cumsum(np.random.randn(len(dates)))  # random walk
+    volume = np.random.randint(1000, 5000, size=len(dates))
+    for i, date in enumerate(dates):
+        stock_data.append({
+            "date": date,
+            "company": company,
+            "open": price[i] + np.random.uniform(-2, 2),
+            "high": price[i] + np.random.uniform(0, 5),
+            "low": price[i] - np.random.uniform(0, 5),
+            "close": price[i],
+            "volume": volume[i]
+        })
+
+stocks_df = pd.DataFrame(stock_data)
+
+# Portfolio allocation (synthetic)
+portfolio_df = pd.DataFrame({
+    "company": companies,
+    "allocation": [0.25, 0.25, 0.25, 0.25]  # equal allocation
+})
+
+# Risk-return scatter (synthetic)
+risk_return_df = pd.DataFrame({
+    "company": companies,
+    "risk": [0.15, 0.12, 0.25, 0.18],
+    "return": [0.10, 0.08, 0.20, 0.15]
+})
+
+# Correlation matrix (synthetic)
+returns = np.random.randn(len(dates), len(companies))
+corr_matrix = pd.DataFrame(returns, columns=companies).corr()
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Stock Market Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("📈 Stock Market Analysis Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Stock Overview", children=[
+            dcc.Dropdown(
+                id="company-filter",
+                options=[{"label": c, "value": c} for c in companies],
+                value="Apple",
+                clearable=False
+            ),
+            dcc.DatePickerRange(
+                id="date-range",
+                start_date=dates.min(),
+                end_date=dates.max(),
+                display_format="YYYY-MM-DD"
+            ),
+            dcc.Graph(id="candlestick-chart"),
+            dcc.Graph(id="volume-bar"),
+        ]),
+        dcc.Tab(label="Portfolio Analysis", children=[
+            dcc.Graph(id="portfolio-pie"),
+            dcc.Graph(id="risk-return-scatter"),
+        ]),
+        dcc.Tab(label="Risk & Correlation", children=[
+            dcc.Graph(id="correlation-heatmap"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+# Candlestick chart
+@app.callback(
+    Output("candlestick-chart", "figure"),
+    [Input("company-filter", "value"),
+     Input("date-range", "start_date"),
+     Input("date-range", "end_date")]
+)
+def update_candlestick(company, start_date, end_date):
+    df = stocks_df[(stocks_df["company"] == company) &
+                   (stocks_df["date"] >= start_date) &
+                   (stocks_df["date"] <= end_date)]
+    fig = go.Figure(data=[go.Candlestick(
+        x=df["date"],
+        open=df["open"],
+        high=df["high"],
+        low=df["low"],
+        close=df["close"],
+        name=company
+    )])
+    # Add moving averages
+    df["MA50"] = df["close"].rolling(50).mean()
+    df["MA200"] = df["close"].rolling(200).mean()
+    fig.add_trace(go.Scatter(x=df["date"], y=df["MA50"], mode="lines", name="50-day MA"))
+    fig.add_trace(go.Scatter(x=df["date"], y=df["MA200"], mode="lines", name="200-day MA"))
+    fig.update_layout(title=f"{company} Stock Prices with Moving Averages")
+    return fig
+
+# Volume bar chart
+@app.callback(
+    Output("volume-bar", "figure"),
+    [Input("company-filter", "value"),
+     Input("date-range", "start_date"),
+     Input("date-range", "end_date")]
+)
+def update_volume(company, start_date, end_date):
+    df = stocks_df[(stocks_df["company"] == company) &
+                   (stocks_df["date"] >= start_date) &
+                   (stocks_df["date"] <= end_date)]
+    fig = px.bar(df, x="date", y="volume", title=f"{company} Trading Volume")
+    return fig
+
+# Portfolio pie chart
+@app.callback(
+    Output("portfolio-pie", "figure"),
+    Input("portfolio-pie", "id")  # dummy input
+)
+def update_portfolio(_):
+    fig = px.pie(portfolio_df, names="company", values="allocation",
+                 title="Portfolio Allocation")
+    return fig
+
+# Risk-return scatter plot
+@app.callback(
+    Output("risk-return-scatter", "figure"),
+    Input("risk-return-scatter", "id")  # dummy input
+)
+def update_risk_return(_):
+    fig = px.scatter(risk_return_df, x="risk", y="return",
+                     text="company", size="return", color="company",
+                     title="Risk vs Return")
+    fig.update_traces(textposition="top center")
+    return fig
+
+# Correlation heatmap
+@app.callback(
+    Output("correlation-heatmap", "figure"),
+    Input("correlation-heatmap", "id")  # dummy input
+)
+def update_heatmap(_):
+    fig = px.imshow(corr_matrix, text_auto=True,
+                    x=companies, y=companies,
+                    title="Stock Return Correlation Matrix")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
