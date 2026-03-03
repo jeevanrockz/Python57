@@ -1,0 +1,94 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Simulated hub airports (lat, lon)
+airports = {
+    "New York": (40.7128, -74.0060),
+    "London": (51.5074, -0.1278),
+    "Dubai": (25.2048, 55.2708),
+    "Singapore": (1.3521, 103.8198),
+    "Sydney": (-33.8688, 151.2093),
+    "Tokyo": (35.6762, 139.6503)
+}
+
+# Simulated routes (pairs of airports)
+routes = [("New York", "London"), ("London", "Dubai"), ("Dubai", "Singapore"),
+          ("Singapore", "Sydney"), ("Tokyo", "Sydney"), ("New York", "Tokyo")]
+
+# Regional passenger traffic
+regions = ["North America", "Europe", "Asia", "Middle East", "Australia"]
+passenger_traffic = [1200000, 950000, 1500000, 700000, 500000]
+
+# Aircraft fleet distribution
+aircraft_types = ["A320", "B737", "B777", "A350", "Others"]
+fleet_share = [25, 30, 20, 15, 10]
+
+# Flight durations (hours)
+np.random.seed(42)
+flight_durations = np.random.normal(8, 2, 300)  # average 8 hours
+
+# Ticket price variation across continents
+continents = ["North America", "Europe", "Asia", "Australia"]
+ticket_prices = [np.random.normal(500, 50, 100),
+                 np.random.normal(450, 40, 100),
+                 np.random.normal(400, 60, 100),
+                 np.random.normal(550, 70, 100)]
+
+# Create dashboard with 2x3 subplots
+fig, axs = plt.subplots(2, 3, figsize=(18,10))
+
+# 1. World Map Scatter Plot: Hub airports
+latitudes = [coord[0] for coord in airports.values()]
+longitudes = [coord[1] for coord in airports.values()]
+axs[0,0].scatter(longitudes, latitudes, color="red", s=100)
+for city, (lat, lon) in airports.items():
+    axs[0,0].text(lon+2, lat+2, city, fontsize=9)
+axs[0,0].set_title("Global Hub Airports")
+axs[0,0].set_xlabel("Longitude")
+axs[0,0].set_ylabel("Latitude")
+axs[0,0].grid(True, linestyle='--', alpha=0.7)
+
+# 2. Route Network Plot
+for route in routes:
+    city1, city2 = route
+    lat1, lon1 = airports[city1]
+    lat2, lon2 = airports[city2]
+    axs[0,1].plot([lon1, lon2], [lat1, lat2], color="blue", linewidth=2)
+axs[0,1].scatter(longitudes, latitudes, color="red", s=100)
+axs[0,1].set_title("Airline Route Network")
+axs[0,1].set_xlabel("Longitude")
+axs[0,1].set_ylabel("Latitude")
+axs[0,1].grid(True, linestyle='--', alpha=0.7)
+
+# 3. Bar Chart: Regional passenger traffic
+axs[0,2].bar(regions, passenger_traffic, color=['#ff9999','#66b3ff','#99ff99','#ffcc99','#c2c2f0'])
+axs[0,2].set_title("Regional Passenger Traffic")
+axs[0,2].set_xlabel("Regions")
+axs[0,2].set_ylabel("Passengers")
+axs[0,2].grid(axis='y', linestyle='--', alpha=0.7)
+
+# 4. Pie Chart: Aircraft fleet distribution
+explode = [0.1 if share == max(fleet_share) else 0 for share in fleet_share]
+axs[1,0].pie(fleet_share, labels=aircraft_types, autopct="%1.1f%%", 
+             startangle=140, explode=explode, shadow=True, 
+             colors=["#ff9999","#66b3ff","#99ff99","#ffcc99","#c2c2f0"])
+axs[1,0].set_title("Aircraft Fleet Distribution")
+
+# 5. Histogram: Flight duration distribution
+axs[1,1].hist(flight_durations, bins=15, color="skyblue", edgecolor="black")
+axs[1,1].set_title("Flight Duration Distribution")
+axs[1,1].set_xlabel("Duration (hours)")
+axs[1,1].set_ylabel("Number of Flights")
+axs[1,1].grid(axis='y', linestyle='--', alpha=0.7)
+
+# 6. Box Plot: Ticket price variation
+axs[1,2].boxplot(ticket_prices, tick_labels=continents)
+axs[1,2].set_title("Ticket Price Variation by Continent")
+axs[1,2].set_ylabel("Price ($)")
+
+# Adjust layout
+plt.tight_layout()
+plt.suptitle("Global Airline Route & Traffic Analytics Dashboard", fontsize=18, y=1.05)
+
+# Show dashboard
+plt.show()
