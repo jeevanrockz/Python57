@@ -1,0 +1,28 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Simulated attendance data (rows = days, columns = months)
+days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+# Random attendance counts (values between 50–100)
+np.random.seed(42)
+attendance = np.random.randint(50, 100, size=(len(days), len(months)))
+
+# Create heatmap
+plt.figure(figsize=(12,6))
+plt.imshow(attendance, cmap="YlGnBu", aspect="auto")
+
+# Add labels
+plt.xticks(ticks=np.arange(len(months)), labels=months)
+plt.yticks(ticks=np.arange(len(days)), labels=days)
+plt.xlabel("Months")
+plt.ylabel("Days of the Week")
+plt.title("Employee Attendance Heatmap")
+
+# Add color bar for interpretation
+plt.colorbar(label="Attendance Count")
+
+# Show plot
+plt.show()
