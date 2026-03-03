@@ -1,0 +1,78 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Simulated data
+months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+passengers = [120000, 135000, 150000, 145000, 160000, 175000, 
+              190000, 200000, 195000, 210000, 220000, 230000]
+
+ticket_sales = [50, 55, 60, 58, 65, 70, 75, 80, 78, 85, 90, 95]
+cargo = [20, 22, 25, 23, 28, 30, 32, 35, 34, 38, 40, 42]
+ancillary = [10, 12, 15, 14, 16, 18, 20, 22, 21, 24, 26, 28]
+
+delay_reasons = ["Weather", "Technical", "Crew", "ATC", "Others"]
+delay_share = [30, 25, 20, 15, 10]
+
+np.random.seed(42)
+delay_minutes = np.random.randint(0, 180, 300)  # delays in minutes
+
+ticket_classes = ["Economy", "Business", "First"]
+ticket_prices = [np.random.normal(200, 30, 100), 
+                 np.random.normal(600, 80, 100), 
+                 np.random.normal(1200, 150, 100)]
+
+fuel_cost = np.random.uniform(50, 100, 12)
+revenue = np.array(ticket_sales) + np.array(cargo) + np.array(ancillary)
+
+# Create dashboard with 3x2 subplots
+fig, axs = plt.subplots(3, 2, figsize=(16,12))
+
+# 1. Line chart: Monthly passenger traffic
+axs[0,0].plot(months, passengers, marker='o', color='blue', linewidth=2)
+axs[0,0].set_title("Monthly Passenger Traffic")
+axs[0,0].set_xlabel("Months")
+axs[0,0].set_ylabel("Passengers")
+axs[0,0].grid(True, linestyle='--', alpha=0.7)
+
+# 2. Stacked bar chart: Revenue breakdown
+axs[0,1].bar(months, ticket_sales, label="Ticket Sales")
+axs[0,1].bar(months, cargo, bottom=ticket_sales, label="Cargo")
+axs[0,1].bar(months, ancillary, bottom=np.array(ticket_sales)+np.array(cargo), label="Ancillary")
+axs[0,1].set_title("Revenue Breakdown")
+axs[0,1].set_xlabel("Months")
+axs[0,1].set_ylabel("Revenue ($M)")
+axs[0,1].legend()
+axs[0,1].grid(axis='y', linestyle='--', alpha=0.7)
+
+# 3. Pie chart: Flight delay reasons
+explode = [0.1 if share == max(delay_share) else 0 for share in delay_share]
+axs[1,0].pie(delay_share, labels=delay_reasons, autopct="%1.1f%%", 
+             startangle=140, explode=explode, shadow=True, 
+             colors=["#ff9999","#66b3ff","#99ff99","#ffcc99","#c2c2f0"])
+axs[1,0].set_title("Flight Delay Reasons")
+
+# 4. Histogram: Flight delay distribution
+axs[1,1].hist(delay_minutes, bins=15, color="skyblue", edgecolor="black")
+axs[1,1].set_title("Flight Delay Distribution")
+axs[1,1].set_xlabel("Delay (minutes)")
+axs[1,1].set_ylabel("Number of Flights")
+axs[1,1].grid(axis='y', linestyle='--', alpha=0.7)
+
+# 5. Box plot: Ticket price variation
+axs[2,0].boxplot(ticket_prices, tick_labels=ticket_classes)
+axs[2,0].set_title("Ticket Price Variation by Class")
+axs[2,0].set_ylabel("Price ($)")
+
+# 6. Scatter plot: Fuel cost vs revenue
+axs[2,1].scatter(fuel_cost, revenue, color="purple", s=100)
+axs[2,1].set_title("Fuel Cost vs Revenue")
+axs[2,1].set_xlabel("Fuel Cost ($M)")
+axs[2,1].set_ylabel("Revenue ($M)")
+axs[2,1].grid(True, linestyle='--', alpha=0.7)
+
+# Adjust layout
+plt.tight_layout()
+plt.suptitle("Airline Performance Analytics Report", fontsize=18, y=1.02)
+
+# Show dashboard
+plt.show()
