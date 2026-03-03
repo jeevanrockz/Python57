@@ -1,0 +1,139 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+activities = ["Running", "Cycling", "Yoga", "Weightlifting"]
+dates = pd.date_range(start="2021-01-01", end="2021-01-15")
+
+# Daily exercise logs
+exercise_data = pd.DataFrame({
+    "date": np.tile(dates, len(activities)),
+    "activity": np.repeat(activities, len(dates)),
+    "duration": np.random.randint(30, 90, len(dates)*len(activities)),
+    "calories_burned": np.random.randint(200, 600, len(dates)*len(activities)),
+    "heart_rate": np.random.randint(90, 160, len(dates)*len(activities)),
+    "steps": np.random.randint(3000, 12000, len(dates)*len(activities))
+})
+
+# Calories consumed vs burned
+nutrition_data = pd.DataFrame({
+    "date": dates,
+    "calories_consumed": np.random.randint(1800, 2800, len(dates)),
+    "calories_burned": np.random.randint(2000, 3000, len(dates))
+})
+
+# Sleep data
+sleep_data = pd.DataFrame({
+    "date": dates,
+    "sleep_hours": np.random.uniform(5, 9, len(dates)),
+    "sleep_quality": np.random.randint(60, 100, len(dates))
+})
+
+# Fitness goals progress
+fitness_goals = pd.DataFrame({
+    "goal": ["Weight Loss", "Muscle Gain", "Endurance", "Flexibility"],
+    "progress": [70, 50, 60, 80]
+})
+
+# Correlation matrix
+corr_matrix = exercise_data[["duration", "calories_burned", "heart_rate", "steps"]].corr()
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Health & Fitness Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🏋️ Health & Fitness Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Exercise & Activity", children=[
+            dcc.Dropdown(
+                id="activity-filter",
+                options=[{"label": a, "value": a} for a in activities],
+                value="Running",
+                clearable=False
+            ),
+            dcc.Graph(id="steps-line"),
+            dcc.Graph(id="scatter-duration-heart"),
+        ]),
+        dcc.Tab(label="Nutrition & Calories", children=[
+            dcc.Graph(id="calories-bar"),
+        ]),
+        dcc.Tab(label="Sleep & Recovery", children=[
+            dcc.Graph(id="sleep-boxplot"),
+        ]),
+        dcc.Tab(label="Fitness Goals", children=[
+            dcc.Graph(id="radar-chart"),
+            dcc.Graph(id="correlation-heatmap"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("steps-line", "figure"), Input("activity-filter", "value"))
+def update_steps_line(activity):
+    df = exercise_data[exercise_data["activity"] == activity]
+    fig = px.line(df, x="date", y="steps", title=f"Daily Steps - {activity}")
+    return fig
+
+@app.callback(Output("scatter-duration-heart", "figure"), Input("activity-filter", "value"))
+def update_scatter(activity):
+    df = exercise_data[exercise_data["activity"] == activity]
+    fig = px.scatter(df, x="duration", y="heart_rate", size="calories_burned",
+                     title=f"Duration vs Heart Rate - {activity}")
+    return fig
+
+@app.callback(Output("calories-bar", "figure"), Input("calories-bar", "id"))
+def update_calories(_):
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=nutrition_data["date"], y=nutrition_data["calories_consumed"], name="Consumed"))
+    fig.add_trace(go.Bar(x=nutrition_data["date"], y=nutrition_data["calories_burned"], name="Burned"))
+    fig.update_layout(barmode="group", title="Calories Consumed vs Burned")
+    return fig
+
+@app.callback(Output("sleep-boxplot", "figure"), Input("sleep-boxplot", "id"))
+def update_sleep(_):
+    fig = px.box(sleep_data, y="sleep_hours", title="Sleep Duration Variability")
+    return fig
+
+@app.callback(Output("radar-chart", "figure"), Input("radar-chart", "id"))
+def update_radar(_):
+    categories = fitness_goals["goal"].tolist()
+    values = fitness_goals["progress"].tolist()
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill="toself",
+        name="Progress"
+    ))
+    fig.update_layout(title="Fitness Goals Progress", polar=dict(radialaxis=dict(visible=True)))
+    return fig
+
+@app.callback(Output("correlation-heatmap", "figure"), Input("correlation-heatmap", "id"))
+def update_heatmap(_):
+    fig = px.imshow(corr_matrix, text_auto=True,
+                    x=corr_matrix.columns, y=corr_matrix.columns,
+                    title="Correlation Between Exercise Metrics")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
