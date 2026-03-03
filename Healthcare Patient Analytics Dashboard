@@ -1,0 +1,71 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated healthcare dataset
+np.random.seed(42)
+n = 800
+data = pd.DataFrame({
+    "PatientID": [f"P{i}" for i in range(n)],
+    "Gender": np.random.choice(["Male", "Female"], n),
+    "AgeGroup": np.random.choice(["0-18", "19-35", "36-50", "51-65", "65+"], n),
+    "Condition": np.random.choice(["Diabetes", "Hypertension", "Asthma", "Cancer", "Cardiac"], n),
+    "TreatmentCost": np.random.normal(5000, 1500, n),
+    "HospitalVisits": np.random.poisson(3, n),
+    "RecoveryDays": np.random.normal(14, 5, n),
+    "Satisfaction": np.random.randint(1, 6, n)   # 1–5 scale
+})
+
+# 1. CountPlot: Number of patients by condition
+plt.figure(figsize=(8,6))
+sns.countplot(x="Condition", hue="Condition", data=data, palette="Set2", legend=False)
+plt.title("Number of Patients by Medical Condition")
+plt.show()
+
+# 2. Box Plot: Treatment cost distribution across age groups
+plt.figure(figsize=(10,6))
+sns.boxplot(x="AgeGroup", y="TreatmentCost", hue="AgeGroup", data=data, palette="Set3", legend=False)
+plt.title("Treatment Cost Distribution by Age Group")
+plt.show()
+
+# 3. Violin Plot: Recovery days distribution across genders
+plt.figure(figsize=(8,6))
+sns.violinplot(x="Gender", y="RecoveryDays", hue="Gender", data=data, palette="muted", legend=False)
+plt.title("Recovery Days Distribution by Gender")
+plt.show()
+
+# 4. StripPlot: Satisfaction scores across conditions
+plt.figure(figsize=(10,6))
+sns.stripplot(x="Condition", y="Satisfaction", hue="Condition", data=data, jitter=True, alpha=0.6, palette="Set1", legend=False)
+plt.title("Patient Satisfaction Across Conditions (Strip Plot)")
+plt.show()
+
+# 5. LMPlot: Hospital visits vs treatment cost regression
+sns.lmplot(x="HospitalVisits", y="TreatmentCost", hue="Gender", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Hospital Visits vs Treatment Cost (Regression by Gender)")
+plt.show()
+
+# 6. PairPlot: Relationships between treatment cost, recovery days, and satisfaction
+sns.pairplot(data[["TreatmentCost", "RecoveryDays", "Satisfaction"]], diag_kind="kde")
+plt.suptitle("Pairwise Relationships of Treatment Cost, Recovery Days, and Satisfaction", y=1.02)
+plt.show()
+
+# 7. Heatmap: Correlation matrix of numerical metrics
+corr = data[["TreatmentCost", "HospitalVisits", "RecoveryDays", "Satisfaction"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Patient Metrics")
+plt.show()
+
+# 8. FacetGrid: Recovery days distribution by condition
+g = sns.FacetGrid(data, col="Condition", height=4, aspect=1.2)
+g.map_dataframe(sns.histplot, x="RecoveryDays", bins=20, color="skyblue")
+plt.suptitle("Recovery Days Distribution by Condition", y=1.05)
+plt.show()
+
+# 9. SwarmPlot: Satisfaction distribution across age groups
+plt.figure(figsize=(10,6))
+sns.swarmplot(x="AgeGroup", y="Satisfaction", hue="AgeGroup", data=data, palette="Set2", legend=False, size=3)
+plt.title("Patient Satisfaction Distribution Across Age Groups (Swarm Plot)")
+plt.show()
