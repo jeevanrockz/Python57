@@ -1,0 +1,147 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+# Renewable energy production by source over time
+years = list(range(2010, 2021))
+energy_sources = ["Solar", "Wind", "Hydro", "Biomass"]
+energy_data = pd.DataFrame({
+    "year": np.tile(years, len(energy_sources)),
+    "source": np.repeat(energy_sources, len(years)),
+    "production": np.random.randint(50, 500, len(years)*len(energy_sources))
+})
+
+# Carbon emissions by sector
+sectors = ["Transport", "Industry", "Residential"]
+emissions = pd.DataFrame({
+    "sector": sectors,
+    "emissions": [1200, 2500, 1800]
+})
+
+# Energy consumption vs emissions per capita
+countries = ["Country A", "Country B", "Country C", "Country D"]
+consumption_emissions = pd.DataFrame({
+    "country": countries,
+    "consumption_per_capita": [4000, 6000, 3500, 5000],
+    "emissions_per_capita": [2.5, 3.8, 2.0, 3.0]
+})
+
+# Recycling vs waste generation
+recycling_data = pd.DataFrame({
+    "category": ["Recycling", "Waste"],
+    "value": [60, 40]
+})
+
+# Country sustainability scores
+sustainability_scores = pd.DataFrame({
+    "country": countries,
+    "score": [75, 60, 85, 70],
+    "population": [50, 80, 40, 60]
+})
+
+# Global renewable energy growth
+global_growth = pd.DataFrame({
+    "year": years,
+    "renewables": np.cumsum(np.random.randint(100, 300, len(years)))
+})
+
+# Correlation matrix (synthetic)
+corr_matrix = pd.DataFrame({
+    "consumption": [4000, 6000, 3500, 5000],
+    "emissions": [2.5, 3.8, 2.0, 3.0],
+    "score": [75, 60, 85, 70]
+}).corr()
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Renewable Energy & Sustainability Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🌍 Renewable Energy & Sustainability Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Energy Production", children=[
+            dcc.Graph(id="stacked-area"),
+            dcc.Graph(id="global-line"),
+        ]),
+        dcc.Tab(label="Carbon Emissions", children=[
+            dcc.Graph(id="emissions-bar"),
+            dcc.Graph(id="scatter-consumption-emissions"),
+        ]),
+        dcc.Tab(label="Resource Efficiency", children=[
+            dcc.Graph(id="recycling-pie"),
+        ]),
+        dcc.Tab(label="Country Comparisons", children=[
+            dcc.Graph(id="sustainability-heatmap"),
+            dcc.Graph(id="bubble-chart"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("stacked-area", "figure"), Input("stacked-area", "id"))
+def update_area(_):
+    fig = px.area(energy_data, x="year", y="production", color="source",
+                  title="Renewable Energy Production by Source")
+    return fig
+
+@app.callback(Output("global-line", "figure"), Input("global-line", "id"))
+def update_global_line(_):
+    fig = px.line(global_growth, x="year", y="renewables",
+                  title="Global Renewable Energy Growth Trend")
+    return fig
+
+@app.callback(Output("emissions-bar", "figure"), Input("emissions-bar", "id"))
+def update_emissions_bar(_):
+    fig = px.bar(emissions, x="sector", y="emissions",
+                 title="Carbon Emissions by Sector")
+    return fig
+
+@app.callback(Output("scatter-consumption-emissions", "figure"), Input("scatter-consumption-emissions", "id"))
+def update_scatter(_):
+    fig = px.scatter(consumption_emissions, x="consumption_per_capita", y="emissions_per_capita",
+                     text="country", size="consumption_per_capita", color="country",
+                     title="Energy Consumption vs Emissions per Capita")
+    fig.update_traces(textposition="top center")
+    return fig
+
+@app.callback(Output("recycling-pie", "figure"), Input("recycling-pie", "id"))
+def update_recycling(_):
+    fig = px.pie(recycling_data, names="category", values="value",
+                 title="Recycling vs Waste Generation")
+    return fig
+
+@app.callback(Output("sustainability-heatmap", "figure"), Input("sustainability-heatmap", "id"))
+def update_heatmap(_):
+    fig = px.imshow(corr_matrix, text_auto=True,
+                    x=corr_matrix.columns, y=corr_matrix.columns,
+                    title="Correlation Between Consumption, Emissions, and Sustainability Score")
+    return fig
+
+@app.callback(Output("bubble-chart", "figure"), Input("bubble-chart", "id"))
+def update_bubble(_):
+    fig = px.scatter(sustainability_scores, x="score", y="country",
+                     size="population", color="score", hover_name="country",
+                     title="Country Sustainability Scores (Bubble Chart)")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
