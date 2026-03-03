@@ -1,0 +1,143 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+# Patient demographics
+patients = pd.DataFrame({
+    "age": np.random.randint(0, 90, 200),
+    "gender": np.random.choice(["Male", "Female"], 200),
+    "condition": np.random.choice(["Cardiac", "Respiratory", "Orthopedic", "Neurology"], 200)
+})
+
+# Hospital admissions/discharges
+# FIX: use "ME" instead of "M"
+dates = pd.date_range(start="2021-01-01", end="2021-12-31", freq="ME")
+admissions = np.random.randint(50, 200, len(dates))
+discharges = admissions - np.random.randint(0, 20, len(dates))
+hospital_stats = pd.DataFrame({"date": dates, "admissions": admissions, "discharges": discharges})
+
+# Resource utilization
+resources = pd.DataFrame({
+    "hospital": ["Hospital A", "Hospital B", "Hospital C"],
+    "beds": [120, 150, 100],
+    "staff": [80, 100, 70],
+    "equipment": [50, 60, 40]
+})
+
+# Treatment success rates
+treatment = pd.DataFrame({
+    "condition": ["Cardiac", "Respiratory", "Orthopedic", "Neurology"],
+    "success_rate": [0.85, 0.78, 0.90, 0.82]
+})
+
+# Cost vs outcomes
+cost_outcomes = pd.DataFrame({
+    "hospital": ["Hospital A", "Hospital B", "Hospital C"],
+    "avg_cost": [5000, 7000, 4500],
+    "length_of_stay": [5, 7, 4],
+    "success_rate": [0.85, 0.80, 0.88],
+    "patients_treated": [200, 250, 180]
+})
+
+# Correlation matrix
+corr_matrix = cost_outcomes[["avg_cost", "length_of_stay", "success_rate"]].corr()
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Healthcare Analytics Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🏥 Healthcare Analytics Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Patient Demographics", children=[
+            dcc.Graph(id="age-histogram"),
+            dcc.Graph(id="condition-pie"),
+        ]),
+        dcc.Tab(label="Hospital Performance", children=[
+            dcc.Graph(id="admissions-line"),
+            dcc.Graph(id="success-box"),
+        ]),
+        dcc.Tab(label="Resource Utilization", children=[
+            dcc.Graph(id="resource-bar"),
+        ]),
+        dcc.Tab(label="Cost & Outcomes", children=[
+            dcc.Graph(id="correlation-heatmap"),
+            dcc.Graph(id="bubble-chart"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("age-histogram", "figure"), Input("age-histogram", "id"))
+def update_age_histogram(_):
+    fig = px.histogram(patients, x="age", nbins=20, color="gender",
+                       title="Patient Age Distribution")
+    return fig
+
+@app.callback(Output("condition-pie", "figure"), Input("condition-pie", "id"))
+def update_condition_pie(_):
+    fig = px.pie(patients, names="condition", title="Patient Conditions Distribution")
+    return fig
+
+@app.callback(Output("admissions-line", "figure"), Input("admissions-line", "id"))
+def update_admissions_line(_):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=hospital_stats["date"], y=hospital_stats["admissions"],
+                             mode="lines+markers", name="Admissions"))
+    fig.add_trace(go.Scatter(x=hospital_stats["date"], y=hospital_stats["discharges"],
+                             mode="lines+markers", name="Discharges"))
+    fig.update_layout(title="Admissions vs Discharges Over Time")
+    return fig
+
+@app.callback(Output("success-box", "figure"), Input("success-box", "id"))
+def update_success_box(_):
+    fig = px.box(treatment, y="success_rate", x="condition",
+                 title="Treatment Success Rates by Condition")
+    return fig
+
+@app.callback(Output("resource-bar", "figure"), Input("resource-bar", "id"))
+def update_resource_bar(_):
+    fig = go.Figure(data=[
+        go.Bar(name="Beds", x=resources["hospital"], y=resources["beds"]),
+        go.Bar(name="Staff", x=resources["hospital"], y=resources["staff"]),
+        go.Bar(name="Equipment", x=resources["hospital"], y=resources["equipment"])
+    ])
+    fig.update_layout(barmode="stack", title="Resource Utilization")
+    return fig
+
+@app.callback(Output("correlation-heatmap", "figure"), Input("correlation-heatmap", "id"))
+def update_heatmap(_):
+    fig = px.imshow(corr_matrix, text_auto=True,
+                    x=corr_matrix.columns, y=corr_matrix.columns,
+                    title="Correlation Between Cost, Stay, and Success Rate")
+    return fig
+
+@app.callback(Output("bubble-chart", "figure"), Input("bubble-chart", "id"))
+def update_bubble(_):
+    fig = px.scatter(cost_outcomes, x="avg_cost", y="success_rate",
+                     size="patients_treated", color="hospital",
+                     hover_name="hospital",
+                     title="Hospital Efficiency (Cost vs Success Rate)")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
