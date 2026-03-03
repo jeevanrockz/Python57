@@ -1,0 +1,21 @@
+import matplotlib.pyplot as plt
+
+# Simulated smartphone market share data
+companies = ["Apple", "Samsung", "Xiaomi", "OnePlus", "Others"]
+market_share = [35, 30, 15, 10, 10]
+
+# Create pie chart
+plt.figure(figsize=(8,8))
+
+# Explode the largest slice (Apple in this case)
+explode = [0.1 if share == max(market_share) else 0 for share in market_share]
+
+plt.pie(market_share, labels=companies, autopct="%1.1f%%", 
+        startangle=140, explode=explode, shadow=True, 
+        colors=["#ff9999","#66b3ff","#99ff99","#ffcc99","#c2c2f0"])
+
+# Add title
+plt.title("Smartphone Market Share Analysis")
+
+# Show plot
+plt.show()
