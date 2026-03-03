@@ -1,0 +1,173 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+# Global temperature anomalies
+temp_df = pd.DataFrame({
+    "year": list(range(1980, 2021)),
+    "anomaly": [0.1 + 0.02*(i-1980) for i in range(1980, 2021)],
+    "lower_ci": [0.05 + 0.02*(i-1980) for i in range(1980, 2021)],
+    "upper_ci": [0.15 + 0.02*(i-1980) for i in range(1980, 2021)]
+})
+
+# CO2 emissions by country (with ISO-3 codes)
+co2_df = pd.DataFrame({
+    "country": ["United States", "China", "India", "Germany", "Brazil"] * 5,
+    "iso_code": ["USA", "CHN", "IND", "DEU", "BRA"] * 5,
+    "year": sum([[2000+i]*5 for i in range(5)], []),
+    "emissions": [5000, 6000, 2000, 1500, 1000,
+                  5200, 6500, 2200, 1400, 1100,
+                  5400, 7000, 2500, 1300, 1200,
+                  5600, 7500, 2800, 1200, 1300,
+                  5800, 8000, 3000, 1100, 1400]
+})
+
+# GDP vs emissions
+gdp_df = pd.DataFrame({
+    "country": ["United States", "China", "India", "Germany", "Brazil"],
+    "year": [2020]*5,
+    "gdp_per_capita": [65000, 10000, 2500, 50000, 9000],
+    "emissions": [5800, 8000, 3000, 1100, 1400],
+    "continent": ["North America", "Asia", "Asia", "Europe", "South America"]
+})
+
+# Extreme weather events
+weather_df = pd.DataFrame({
+    "year": [2010, 2011, 2012, 2013, 2014],
+    "event_type": ["Hurricane", "Flood", "Drought", "Wildfire", "Storm"],
+    "count": [15, 40, 25, 30, 50]
+})
+
+# Sea level rise projections
+sea_level_df = pd.DataFrame({
+    "year": [2020, 2030, 2040, 2050],
+    "scenario": ["Low", "Medium", "High", "Extreme"],
+    "sea_level": [0.1, 0.3, 0.6, 1.0]
+})
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Climate Change Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🌍 Climate Change Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Global Overview", children=[
+            dcc.Graph(id="temp-line"),
+            dcc.Graph(id="co2-map"),
+        ]),
+        dcc.Tab(label="Country Comparisons", children=[
+            dcc.Dropdown(
+                id="country-filter",
+                options=[{"label": c, "value": c} for c in gdp_df["country"].unique()],
+                value="India",
+                clearable=False
+            ),
+            dcc.Graph(id="scatter-gdp-co2"),
+            dcc.Graph(id="weather-bar"),
+        ]),
+        dcc.Tab(label="Future Projections", children=[
+            dcc.Slider(
+                id="year-slider",
+                min=sea_level_df["year"].min(),
+                max=sea_level_df["year"].max(),
+                step=10,
+                value=sea_level_df["year"].min(),
+                marks={str(y): str(y) for y in sea_level_df["year"].unique()}
+            ),
+            dcc.Graph(id="sea-level-surface"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(
+    Output("temp-line", "figure"),
+    Input("temp-line", "id")  # dummy input to trigger once
+)
+def update_temp_line(_):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=temp_df["year"], y=temp_df["anomaly"],
+        mode="lines", name="Anomaly"
+    ))
+    fig.add_trace(go.Scatter(
+        x=temp_df["year"], y=temp_df["upper_ci"],
+        mode="lines", line=dict(width=0), showlegend=False
+    ))
+    fig.add_trace(go.Scatter(
+        x=temp_df["year"], y=temp_df["lower_ci"],
+        mode="lines", line=dict(width=0), fill="tonexty", name="Confidence Interval"
+    ))
+    fig.update_layout(title="Global Temperature Anomalies")
+    return fig
+
+@app.callback(
+    Output("co2-map", "figure"),
+    Input("co2-map", "id")  # dummy input
+)
+def update_co2_map(_):
+    df = co2_df[co2_df["year"] == co2_df["year"].max()]
+    fig = px.choropleth(
+        df, locations="iso_code", locationmode="ISO-3",
+        color="emissions", hover_name="country",
+        title="CO₂ Emissions by Country"
+    )
+    return fig
+
+@app.callback(
+    Output("scatter-gdp-co2", "figure"),
+    Input("country-filter", "value")
+)
+def update_scatter(country):
+    df = gdp_df[gdp_df["year"] == gdp_df["year"].max()]
+    fig = px.scatter(
+        df, x="gdp_per_capita", y="emissions",
+        color="continent", hover_name="country",
+        title="GDP per Capita vs CO₂ Emissions"
+    )
+    return fig
+
+@app.callback(
+    Output("weather-bar", "figure"),
+    Input("country-filter", "value")
+)
+def update_weather_bar(country):
+    df = weather_df
+    fig = px.bar(df, x="event_type", y="count", title="Extreme Weather Events Frequency")
+    return fig
+
+@app.callback(
+    Output("sea-level-surface", "figure"),
+    Input("year-slider", "value")
+)
+def update_sea_level(year):
+    df = sea_level_df[sea_level_df["year"] == year]
+    fig = go.Figure(data=[go.Surface(
+        z=[[df["sea_level"].values]],
+        x=[df["scenario"].values],
+        y=[df["year"].values]
+    )])
+    fig.update_layout(title=f"Sea Level Rise Projections ({year})")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
