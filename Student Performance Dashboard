@@ -1,0 +1,153 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+students = ["Alice", "Bob", "Charlie", "Diana", "Ethan"]
+
+# Subject scores
+scores = pd.DataFrame({
+    "student": np.repeat(students, 4),
+    "subject": ["Math", "Science", "English", "History"] * len(students),
+    "score": np.random.randint(50, 100, len(students)*4),
+    "gender": np.random.choice(["Male", "Female"], len(students)*4),
+    "grade": np.random.choice(["Grade 9", "Grade 10"], len(students)*4)
+})
+
+# Attendance records
+dates = pd.date_range(start="2021-01-01", end="2021-03-31", freq="D")
+attendance = pd.DataFrame({
+    "date": dates,
+    "attendance_rate": np.random.uniform(0.7, 1.0, len(dates))
+})
+
+# GPA and extracurricular participation
+gpa_data = pd.DataFrame({
+    "student": students,
+    "GPA": np.random.uniform(2.5, 4.0, len(students)),
+    "activities": np.random.randint(0, 5, len(students))
+})
+
+# Correlation matrix for subjects
+subject_scores = pd.DataFrame({
+    "Math": np.random.randint(50, 100, len(students)),
+    "Science": np.random.randint(50, 100, len(students)),
+    "English": np.random.randint(50, 100, len(students)),
+    "History": np.random.randint(50, 100, len(students))
+})
+corr_matrix = subject_scores.corr()
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Student Performance Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🎓 Student Performance Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Subject Analysis", children=[
+            dcc.Dropdown(
+                id="subject-filter",
+                options=[{"label": s, "value": s} for s in scores["subject"].unique()],
+                value="Math",
+                clearable=False
+            ),
+            dcc.Graph(id="score-histogram"),
+            dcc.Graph(id="score-boxplot"),
+            dcc.Graph(id="subject-bar"),
+        ]),
+        dcc.Tab(label="Student Profiles", children=[
+            dcc.Dropdown(
+                id="student-filter",
+                options=[{"label": s, "value": s} for s in students],
+                value="Alice",
+                clearable=False
+            ),
+            dcc.Graph(id="radar-chart"),
+            dcc.Graph(id="scatter-gpa-activities"),
+        ]),
+        dcc.Tab(label="Attendance Trends", children=[
+            dcc.Graph(id="attendance-line"),
+        ]),
+        dcc.Tab(label="Correlation Analysis", children=[
+            dcc.Graph(id="correlation-heatmap"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("score-histogram", "figure"), Input("subject-filter", "value"))
+def update_histogram(subject):
+    df = scores[scores["subject"] == subject]
+    fig = px.histogram(df, x="score", nbins=10, color="gender",
+                       title=f"{subject} Score Distribution")
+    return fig
+
+@app.callback(Output("score-boxplot", "figure"), Input("subject-filter", "value"))
+def update_boxplot(subject):
+    df = scores[scores["subject"] == subject]
+    fig = px.box(df, x="grade", y="score", color="gender",
+                 title=f"{subject} Scores by Grade and Gender")
+    return fig
+
+@app.callback(Output("subject-bar", "figure"), Input("subject-filter", "value"))
+def update_subject_bar(subject):
+    avg_scores = scores.groupby("subject")["score"].mean().reset_index()
+    fig = px.bar(avg_scores, x="subject", y="score", title="Average Scores per Subject")
+    return fig
+
+@app.callback(Output("radar-chart", "figure"), Input("student-filter", "value"))
+def update_radar(student):
+    df = scores[scores["student"] == student]
+    categories = df["subject"].tolist()
+    values = df["score"].tolist()
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill="toself",
+        name=student
+    ))
+    fig.update_layout(title=f"{student} Performance Radar", polar=dict(radialaxis=dict(visible=True)))
+    return fig
+
+@app.callback(Output("scatter-gpa-activities", "figure"), Input("student-filter", "value"))
+def update_scatter(student):
+    fig = px.scatter(gpa_data, x="GPA", y="activities", text="student",
+                     size="GPA", color="student",
+                     title="GPA vs Extracurricular Activities")
+    fig.update_traces(textposition="top center")
+    return fig
+
+@app.callback(Output("attendance-line", "figure"), Input("attendance-line", "id"))
+def update_attendance(_):
+    fig = px.line(attendance, x="date", y="attendance_rate",
+                  title="Attendance Trends Over Semester")
+    return fig
+
+@app.callback(Output("correlation-heatmap", "figure"), Input("correlation-heatmap", "id"))
+def update_heatmap(_):
+    fig = px.imshow(corr_matrix, text_auto=True,
+                    x=corr_matrix.columns, y=corr_matrix.columns,
+                    title="Correlation Between Subjects")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
