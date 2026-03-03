@@ -1,0 +1,54 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated climate dataset
+np.random.seed(42)
+years = np.arange(2000, 2026)
+regions = ["Asia", "Europe", "North America", "Africa"]
+n = len(years) * len(regions)
+
+data = pd.DataFrame({
+    "Year": np.tile(years, len(regions)),
+    "Region": np.repeat(regions, len(years)),
+    "Temperature": np.random.normal(15, 2, n) + np.linspace(0, 2, n),  # rising trend
+    "Rainfall": np.random.normal(1000, 200, n),
+    "CO2": np.random.normal(400, 50, n) + np.linspace(0, 30, n),       # rising trend
+    "SeaLevel": np.random.normal(5, 1, n) + np.linspace(0, 1.5, n)     # rising trend
+})
+
+# 1. Line Plot: Temperature trends over years by region
+plt.figure(figsize=(10,6))
+sns.lineplot(x="Year", y="Temperature", hue="Region", data=data, marker="o")
+plt.title("Average Temperature Trends by Region")
+plt.show()
+
+# 2. FacetGrid: Rainfall distribution faceted by region
+g = sns.FacetGrid(data, col="Region", height=4)
+g.map_dataframe(sns.histplot, x="Rainfall", bins=15, color="skyblue")
+plt.suptitle("Rainfall Distribution by Region", y=1.05)
+plt.show()
+
+# 3. KDE Plot: CO2 emissions distribution
+plt.figure(figsize=(8,6))
+sns.kdeplot(data["CO2"], fill=True, color="red")
+plt.title("Distribution of CO2 Emissions (KDE Plot)")
+plt.show()
+
+# 4. LMPlot: Temperature vs CO2 emissions regression
+sns.lmplot(x="CO2", y="Temperature", hue="Region", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Temperature vs CO2 Emissions (Regression by Region)")
+plt.show()
+
+# 5. JointPlot: Rainfall vs Sea Level Rise
+sns.jointplot(x="Rainfall", y="SeaLevel", data=data, kind="scatter", color="green")
+plt.suptitle("Rainfall vs Sea Level Rise (Joint Distribution)", y=1.02)
+plt.show()
+
+# 6. Heatmap: Correlation matrix of climate metrics
+corr = data[["Temperature", "Rainfall", "CO2", "SeaLevel"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Climate Metrics")
+plt.show()
