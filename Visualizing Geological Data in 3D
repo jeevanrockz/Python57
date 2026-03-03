@@ -1,0 +1,27 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Simulated geological data
+np.random.seed(42)
+latitude = np.random.uniform(10, 20, 100)   # latitudes between 10–20
+longitude = np.random.uniform(70, 80, 100)  # longitudes between 70–80
+depth = np.random.uniform(100, 500, 100)    # depth values between 100–500 meters
+
+# Create 3D scatter plot
+fig = plt.figure(figsize=(10,7))
+ax = fig.add_subplot(111, projection='3d')
+
+scatter = ax.scatter(latitude, longitude, depth, 
+                     c=depth, cmap="viridis", s=50)
+
+# Add labels and title
+ax.set_xlabel("Latitude")
+ax.set_ylabel("Longitude")
+ax.set_zlabel("Depth (m)")
+ax.set_title("3D Geological Data Visualization")
+
+# Add color bar
+fig.colorbar(scatter, ax=ax, label="Depth (m)")
+
+# Show plot
+plt.show()
