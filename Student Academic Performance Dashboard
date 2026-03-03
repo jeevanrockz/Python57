@@ -1,0 +1,53 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated student dataset
+np.random.seed(42)
+n = 500
+data = pd.DataFrame({
+    "Student": [f"Student{i}" for i in range(n)],
+    "Gender": np.random.choice(["Male", "Female"], n),
+    "GradeLevel": np.random.choice(["Grade 9", "Grade 10", "Grade 11", "Grade 12"], n),
+    "Subject": np.random.choice(["Math", "Science", "English", "History"], n),
+    "ExamScore": np.random.normal(75, 10, n),
+    "StudyHours": np.random.normal(15, 5, n),
+    "Attendance": np.random.normal(90, 5, n)  # percentage
+})
+
+# 1. Bar Plot: Average exam scores by subject
+plt.figure(figsize=(8,6))
+sns.barplot(x="Subject", y="ExamScore", data=data, estimator=np.mean, errorbar=None)
+plt.title("Average Exam Scores by Subject")
+plt.show()
+
+# 2. Box Plot: Study hours distribution across grade levels
+plt.figure(figsize=(8,6))
+sns.boxplot(x="GradeLevel", y="StudyHours", data=data)
+plt.title("Study Hours Distribution by Grade Level")
+plt.show()
+
+# 3. Violin Plot: Attendance distribution across genders
+plt.figure(figsize=(8,6))
+sns.violinplot(x="Gender", y="Attendance", data=data)
+plt.title("Attendance Distribution by Gender")
+plt.show()
+
+# 4. StripPlot: Exam scores distribution across subjects
+plt.figure(figsize=(8,6))
+sns.stripplot(x="Subject", y="ExamScore", data=data, jitter=True, alpha=0.6)
+plt.title("Exam Scores Distribution Across Subjects (Strip Plot)")
+plt.show()
+
+# 5. LMPlot: Study hours vs exam scores regression
+sns.lmplot(x="StudyHours", y="ExamScore", hue="Gender", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Study Hours vs Exam Scores (Regression by Gender)")
+plt.show()
+
+# 6. Heatmap: Correlation matrix of academic metrics
+corr = data[["ExamScore", "StudyHours", "Attendance"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Academic Metrics")
+plt.show()
