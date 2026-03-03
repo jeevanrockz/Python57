@@ -1,0 +1,51 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated customer dataset
+np.random.seed(42)
+n = 300
+data = pd.DataFrame({
+    "Gender": np.random.choice(["Male", "Female"], n),
+    "AgeGroup": np.random.choice(["18-25", "26-35", "36-45", "46-60"], n),
+    "Region": np.random.choice(["North", "South", "East", "West"], n),
+    "Income": np.random.normal(50000, 15000, n),
+    "Spending": np.random.normal(2000, 500, n),
+    "Purchases": np.random.randint(1, 20, n)
+})
+
+# Create dashboard with 2x3 subplots
+fig, axs = plt.subplots(2, 3, figsize=(18,10))
+
+# 1. Box plot: Spending distribution across gender
+sns.boxplot(x="Gender", y="Spending", data=data, ax=axs[0,0])
+axs[0,0].set_title("Spending Distribution by Gender")
+
+# 2. Violin plot: Spending distribution across age groups
+sns.violinplot(x="AgeGroup", y="Spending", data=data, ax=axs[0,1])
+axs[0,1].set_title("Spending Distribution by Age Group")
+
+# 3. Bar plot: Average spending by region
+sns.barplot(x="Region", y="Spending", data=data, estimator=np.mean, ax=axs[0,2])
+axs[0,2].set_title("Average Spending by Region")
+
+# 4. Histogram: Purchase frequency distribution
+sns.histplot(data["Purchases"], bins=15, kde=True, ax=axs[1,0], color="skyblue")
+axs[1,0].set_title("Customer Purchase Frequency")
+
+# 5. Scatter plot: Income vs Spending
+sns.scatterplot(x="Income", y="Spending", hue="Gender", data=data, ax=axs[1,1])
+axs[1,1].set_title("Income vs Spending")
+
+# 6. Heatmap: Correlation matrix
+corr = data[["Income", "Spending", "Purchases"]].corr()
+sns.heatmap(corr, annot=True, cmap="coolwarm", ax=axs[1,2])
+axs[1,2].set_title("Correlation Matrix")
+
+# Adjust layout
+plt.tight_layout()
+plt.suptitle("Customer Spending Analysis Dashboard (Seaborn)", fontsize=18, y=1.05)
+
+# Show dashboard
+plt.show()
