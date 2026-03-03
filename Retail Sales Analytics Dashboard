@@ -1,0 +1,52 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated retail dataset
+np.random.seed(42)
+n = 600
+data = pd.DataFrame({
+    "TransactionID": [f"T{i}" for i in range(n)],
+    "Category": np.random.choice(["Electronics", "Clothing", "Groceries", "Furniture"], n),
+    "Region": np.random.choice(["North", "South", "East", "West"], n),
+    "CustomerSegment": np.random.choice(["Regular", "Premium"], n),
+    "Revenue": np.random.normal(500, 150, n),
+    "Profit": np.random.normal(50, 20, n),
+    "Discount": np.random.uniform(0, 0.3, n)
+})
+
+# 1. CountPlot: Number of transactions by category
+plt.figure(figsize=(8,6))
+sns.countplot(x="Category", hue="Category", data=data, palette="Set2", legend=False)
+plt.title("Number of Transactions by Product Category")
+plt.show()
+
+# 2. SwarmPlot: Profit distribution across regions
+plt.figure(figsize=(8,6))
+sns.swarmplot(x="Region", y="Profit", hue="Region", data=data, palette="Set1", legend=False)
+plt.title("Profit Distribution Across Regions (Swarm Plot)")
+plt.show()
+
+# 3. PairPlot: Relationships between revenue, profit, and discount
+sns.pairplot(data[["Revenue", "Profit", "Discount"]], diag_kind="kde")
+plt.suptitle("Pairwise Relationships of Revenue, Profit, and Discount", y=1.02)
+plt.show()
+
+# 4. JointPlot: Revenue vs Profit
+sns.jointplot(x="Revenue", y="Profit", data=data, kind="scatter", color="purple")
+plt.suptitle("Revenue vs Profit (Joint Distribution)", y=1.02)
+plt.show()
+
+# 5. Heatmap: Correlation matrix of numerical metrics
+corr = data[["Revenue", "Profit", "Discount"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Retail Metrics")
+plt.show()
+
+# 6. FacetGrid: Revenue distribution by customer segment
+g = sns.FacetGrid(data, col="CustomerSegment", height=4, aspect=1.2)
+g.map_dataframe(sns.histplot, x="Revenue", bins=20, color="skyblue")
+plt.suptitle("Revenue Distribution by Customer Segment", y=1.05)
+plt.show()
