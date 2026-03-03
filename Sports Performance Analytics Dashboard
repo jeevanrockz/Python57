@@ -1,0 +1,53 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated sports dataset
+np.random.seed(42)
+n = 400
+data = pd.DataFrame({
+    "Player": [f"Player{i}" for i in range(n)],
+    "Team": np.random.choice(["Team A", "Team B", "Team C", "Team D"], n),
+    "Position": np.random.choice(["Forward", "Midfielder", "Defender", "Goalkeeper"], n),
+    "Goals": np.random.poisson(5, n),
+    "Assists": np.random.poisson(3, n),
+    "MinutesPlayed": np.random.randint(200, 3000, n),
+    "FitnessScore": np.random.normal(70, 10, n)
+})
+
+# 1. FacetGrid: Goals vs Assists by Position
+g = sns.FacetGrid(data, col="Position", hue="Team", height=4)
+g.map_dataframe(sns.scatterplot, x="Goals", y="Assists")
+g.add_legend()
+plt.suptitle("Goals vs Assists by Position", y=1.05)
+plt.show()
+
+# 2. KDE Plot: Fitness score distribution
+plt.figure(figsize=(8,6))
+sns.kdeplot(data["FitnessScore"], fill=True, color="green")
+plt.title("Distribution of Fitness Scores (KDE Plot)")
+plt.show()
+
+# 3. LMPlot: Minutes Played vs Goals by Team
+sns.lmplot(x="MinutesPlayed", y="Goals", hue="Team", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Minutes Played vs Goals (Regression by Team)")
+plt.show()
+
+# 4. JointPlot: Goals vs Assists
+sns.jointplot(x="Goals", y="Assists", data=data, kind="scatter", color="blue")
+plt.suptitle("Goals vs Assists (Joint Distribution)", y=1.02)
+plt.show()
+
+# 5. Heatmap: Correlation matrix of performance metrics
+corr = data[["Goals", "Assists", "MinutesPlayed", "FitnessScore"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Performance Metrics")
+plt.show()
+
+# 6. StripPlot: Goals distribution across positions
+plt.figure(figsize=(8,6))
+sns.stripplot(x="Position", y="Goals", data=data, jitter=True, alpha=0.6)
+plt.title("Goals Distribution Across Positions (Strip Plot)")
+plt.show()
