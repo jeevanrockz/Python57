@@ -1,0 +1,67 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated financial dataset
+np.random.seed(42)
+# Use "MS" for month start or "ME" for month end
+dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="MS")
+companies = ["TechCorp", "HealthInc", "RetailCo", "EnergyLtd"]
+n = len(dates) * len(companies)
+
+data = pd.DataFrame({
+    "Date": np.tile(dates, len(companies)),
+    "Company": np.repeat(companies, len(dates)),
+    "Sector": np.repeat(["Technology", "Healthcare", "Retail", "Energy"], len(dates)),
+    "StockPrice": np.random.normal(100, 20, n) + np.linspace(0, 50, n),
+    "Volume": np.random.randint(1000, 50000, n),
+    "Returns": np.random.normal(0.02, 0.05, n),
+    "Volatility": np.random.normal(0.15, 0.05, n)
+})
+
+# 1. Line Plot: Stock price trends over time by company
+plt.figure(figsize=(12,6))
+sns.lineplot(x="Date", y="StockPrice", hue="Company", data=data, marker="o")
+plt.title("Stock Price Trends by Company")
+plt.show()
+
+# 2. FacetGrid: Distribution of trading volume by sector
+g = sns.FacetGrid(data, col="Sector", height=4, aspect=1.2)
+g.map_dataframe(sns.histplot, x="Volume", bins=20, color="skyblue")
+plt.suptitle("Trading Volume Distribution by Sector", y=1.05)
+plt.show()
+
+# 3. KDE Plot: Distribution of returns
+plt.figure(figsize=(8,6))
+sns.kdeplot(data["Returns"], fill=True, color="green")
+plt.title("Distribution of Returns (KDE Plot)")
+plt.show()
+
+# 4. LMPlot: Volatility vs Returns regression by sector
+sns.lmplot(x="Volatility", y="Returns", hue="Sector", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Volatility vs Returns (Regression by Sector)")
+plt.show()
+
+# 5. PairPlot: Relationships between stock price, returns, and volatility
+sns.pairplot(data[["StockPrice", "Returns", "Volatility"]], diag_kind="kde")
+plt.suptitle("Pairwise Relationships of Stock Price, Returns, and Volatility", y=1.02)
+plt.show()
+
+# 6. JointPlot: Stock price vs trading volume
+sns.jointplot(x="StockPrice", y="Volume", data=data, kind="scatter", color="purple")
+plt.suptitle("Stock Price vs Trading Volume (Joint Distribution)", y=1.02)
+plt.show()
+
+# 7. Heatmap: Correlation matrix of financial metrics
+corr = data[["StockPrice", "Volume", "Returns", "Volatility"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Matrix of Financial Metrics")
+plt.show()
+
+# 8. SwarmPlot: Returns distribution across companies
+plt.figure(figsize=(10,6))
+sns.swarmplot(x="Company", y="Returns", hue="Company", data=data, palette="Set2", legend=False)
+plt.title("Returns Distribution Across Companies (Swarm Plot)")
+plt.show()
