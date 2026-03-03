@@ -1,0 +1,25 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Simulated customer ages (random data for demo)
+np.random.seed(42)  # for reproducibility
+ages = np.random.randint(18, 70, size=200)  # 200 customers aged 18–70
+
+# Create histogram
+plt.figure(figsize=(10,6))
+counts, bins, patches = plt.hist(ages, bins=10, color='skyblue', edgecolor='black')
+
+# Add labels and title
+plt.xlabel("Age Groups")
+plt.ylabel("Number of Customers")
+plt.title("Customer Age Distribution")
+
+# Highlight the bin with the highest frequency
+max_bin_index = np.argmax(counts)
+patches[max_bin_index].set_facecolor('orange')
+
+# Add grid for readability
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+# Show plot
+plt.show()
