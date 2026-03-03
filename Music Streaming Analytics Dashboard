@@ -1,0 +1,146 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+songs = ["Song A", "Song B", "Song C"]
+artists = ["Artist X", "Artist Y", "Artist Z"]
+genres = ["Pop", "Rock", "Hip-Hop", "Jazz"]
+
+# Daily streams for songs
+dates = pd.date_range(start="2021-01-01", end="2021-01-15")
+streams_data = pd.DataFrame({
+    "date": np.tile(dates, len(songs)),
+    "song": np.repeat(songs, len(dates)),
+    "streams": np.random.randint(1000, 5000, len(dates)*len(songs)),
+    "skips": np.random.randint(100, 1000, len(dates)*len(songs)),
+    "playlist_adds": np.random.randint(50, 500, len(dates)*len(songs))
+})
+
+# Artist popularity
+artist_popularity = pd.DataFrame({
+    "artist": artists,
+    "popularity_index": [75, 60, 85]
+})
+
+# Genre distribution
+genre_distribution = pd.DataFrame({
+    "genre": genres,
+    "share": [30, 25, 25, 20]
+})
+
+# Listener demographics
+listener_data = pd.DataFrame({
+    "genre": np.random.choice(genres, 100),
+    "age": np.random.randint(15, 50, 100),
+    "region": np.random.choice(["North", "South", "East", "West"], 100)
+})
+
+# Correlation matrix
+corr_matrix = streams_data[["streams", "skips", "playlist_adds"]].corr()
+
+# Artist reach bubble chart
+artist_reach = pd.DataFrame({
+    "artist": artists,
+    "streams": [20000, 15000, 25000],
+    "regions": [10, 8, 12],
+    "popularity": [75, 60, 85]
+})
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Music Streaming Analytics Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🎶 Music Streaming Analytics Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Song Trends", children=[
+            dcc.Dropdown(
+                id="song-filter",
+                options=[{"label": s, "value": s} for s in songs],
+                value="Song A",
+                clearable=False
+            ),
+            dcc.Graph(id="streams-line"),
+        ]),
+        dcc.Tab(label="Artist Performance", children=[
+            dcc.Graph(id="artist-bar"),
+            dcc.Graph(id="artist-bubble"),
+        ]),
+        dcc.Tab(label="Listener Demographics", children=[
+            dcc.Graph(id="genre-pie"),
+            dcc.Graph(id="age-boxplot"),
+        ]),
+        dcc.Tab(label="Genre & Correlation Analysis", children=[
+            dcc.Graph(id="scatter-streams-skips"),
+            dcc.Graph(id="correlation-heatmap"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("streams-line", "figure"), Input("song-filter", "value"))
+def update_streams_line(song):
+    df = streams_data[streams_data["song"] == song]
+    fig = px.line(df, x="date", y="streams", title=f"Daily Streams for {song}")
+    return fig
+
+@app.callback(Output("artist-bar", "figure"), Input("artist-bar", "id"))
+def update_artist_bar(_):
+    fig = px.bar(artist_popularity, x="artist", y="popularity_index",
+                 title="Artist Popularity Comparison")
+    return fig
+
+@app.callback(Output("artist-bubble", "figure"), Input("artist-bubble", "id"))
+def update_artist_bubble(_):
+    fig = px.scatter(artist_reach, x="streams", y="regions",
+                     size="popularity", color="artist", hover_name="artist",
+                     title="Artist Reach (Streams vs Regions)")
+    return fig
+
+@app.callback(Output("genre-pie", "figure"), Input("genre-pie", "id"))
+def update_genre_pie(_):
+    fig = px.pie(genre_distribution, names="genre", values="share",
+                 title="Genre Distribution Among Listeners")
+    return fig
+
+@app.callback(Output("age-boxplot", "figure"), Input("age-boxplot", "id"))
+def update_age_boxplot(_):
+    fig = px.box(listener_data, x="genre", y="age",
+                 title="Listener Age Distribution by Genre")
+    return fig
+
+@app.callback(Output("scatter-streams-skips", "figure"), Input("scatter-streams-skips", "id"))
+def update_scatter(_):
+    fig = px.scatter(streams_data, x="streams", y="skips",
+                     size="playlist_adds", color="song", hover_name="song",
+                     title="Streams vs Skips for Songs")
+    return fig
+
+@app.callback(Output("correlation-heatmap", "figure"), Input("correlation-heatmap", "id"))
+def update_heatmap(_):
+    fig = px.imshow(corr_matrix, text_auto=True,
+                    x=corr_matrix.columns, y=corr_matrix.columns,
+                    title="Correlation Between Streams, Skips, and Playlist Adds")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
