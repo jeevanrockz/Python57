@@ -1,0 +1,49 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated retail dataset
+np.random.seed(42)
+n = 400
+data = pd.DataFrame({
+    "Category": np.random.choice(["Electronics", "Fashion", "Home", "Books"], n),
+    "Region": np.random.choice(["North", "South", "East", "West"], n),
+    "Sales": np.random.normal(500, 150, n),
+    "Profit": np.random.normal(50, 20, n),
+    "Discount": np.random.uniform(0, 0.3, n)
+})
+
+# Create dashboard with 2x3 subplots (excluding pair plot)
+fig, axs = plt.subplots(2, 3, figsize=(18,10))
+
+# 1. Bar plot: Average profit by category
+sns.barplot(x="Category", y="Profit", data=data, estimator=np.mean, ax=axs[0,0])
+axs[0,0].set_title("Average Profit by Category")
+
+# 2. Box plot: Profit distribution across regions
+sns.boxplot(x="Region", y="Profit", data=data, ax=axs[0,1])
+axs[0,1].set_title("Profit Distribution by Region")
+
+# 3. Violin plot: Sales distribution across categories
+sns.violinplot(x="Category", y="Sales", data=data, ax=axs[0,2])
+axs[0,2].set_title("Sales Distribution by Category")
+
+# 4. Regression plot: Sales vs Profit
+sns.regplot(x="Sales", y="Profit", data=data, ax=axs[1,0], scatter_kws={"alpha":0.6})
+axs[1,0].set_title("Sales vs Profit (Regression)")
+
+# 5. Heatmap: Correlation matrix
+corr = data[["Sales", "Profit", "Discount"]].corr()
+sns.heatmap(corr, annot=True, cmap="coolwarm", ax=axs[1,2])
+axs[1,2].set_title("Correlation Matrix")
+
+# Adjust layout for dashboard
+plt.tight_layout()
+plt.suptitle("Sales & Profit Analytics Dashboard (Seaborn)", fontsize=18, y=1.05)
+plt.show()
+
+# 6. Pair plot: Sales, Profit, Discount (separate figure)
+sns.pairplot(data[["Sales", "Profit", "Discount"]], diag_kind="kde")
+plt.suptitle("Pair Plot: Sales, Profit, Discount", fontsize=16, y=1.02)
+plt.show()
