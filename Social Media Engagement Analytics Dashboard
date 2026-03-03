@@ -1,0 +1,51 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Simulated social media dataset
+np.random.seed(42)
+n = 500
+data = pd.DataFrame({
+    "Platform": np.random.choice(["YouTube", "Instagram", "Twitter", "Facebook"], n),
+    "ContentType": np.random.choice(["Video", "Image", "Text"], n),
+    "Likes": np.random.randint(50, 5000, n),
+    "Shares": np.random.randint(10, 1000, n),
+    "Comments": np.random.randint(5, 800, n),
+    "WatchTime": np.random.normal(300, 100, n)  # in seconds
+})
+
+# 1. Catplot: Likes by platform, faceted by content type
+sns.catplot(x="Platform", y="Likes", hue="ContentType", kind="bar", data=data, height=5, aspect=1.5)
+plt.title("Likes by Platform and Content Type")
+plt.show()
+
+# 2. LMPlot: Regression of watch time vs shares, grouped by platform
+sns.lmplot(x="WatchTime", y="Shares", hue="Platform", data=data, height=5, aspect=1.5, scatter_kws={"alpha":0.6})
+plt.title("Watch Time vs Shares (Regression by Platform)")
+plt.show()
+
+# 3. JointPlot: Comments vs Likes with marginal distributions
+sns.jointplot(x="Likes", y="Comments", data=data, kind="scatter", color="purple")
+plt.suptitle("Comments vs Likes (Joint Distribution)", y=1.02)
+plt.show()
+
+# 4. Heatmap (instead of Clustermap): Correlation of engagement metrics
+corr = data[["Likes", "Shares", "Comments", "WatchTime"]].corr()
+plt.figure(figsize=(6,5))
+sns.heatmap(corr, annot=True, cmap="coolwarm")
+plt.title("Correlation Heatmap of Engagement Metrics")
+plt.show()
+
+# 5. StripPlot: Engagement distribution across platforms
+plt.figure(figsize=(8,6))
+sns.stripplot(x="Platform", y="Shares", data=data, jitter=True, alpha=0.6)
+plt.title("Shares Distribution Across Platforms (Strip Plot)")
+plt.show()
+
+# 6. SwarmPlot: Detailed scatter of shares across content categories
+plt.figure(figsize=(8,6))
+sns.swarmplot(x="ContentType", y="Shares", data=data, hue="Platform")
+plt.title("Shares Across Content Categories (Swarm Plot)")
+plt.legend(title="Platform")
+plt.show()
