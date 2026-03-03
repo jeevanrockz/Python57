@@ -1,0 +1,155 @@
+import dash
+from dash import dcc, html, Input, Output
+import plotly.express as px
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# Step 1: Create Synthetic Data
+# -----------------------------
+
+crops = ["Wheat", "Rice", "Maize", "Soybeans"]
+regions = ["North", "South", "East", "West"]
+years = list(range(2015, 2021))
+
+# Crop yields over seasons
+yield_data = pd.DataFrame({
+    "year": np.tile(years, len(crops)),
+    "crop": np.repeat(crops, len(years)),
+    "yield": np.random.randint(2000, 5000, len(years)*len(crops))
+})
+
+# Regional yield comparison
+regional_yield = pd.DataFrame({
+    "region": regions,
+    "yield": np.random.randint(3000, 6000, len(regions))
+})
+
+# Rainfall vs crop yield
+rainfall_yield = pd.DataFrame({
+    "rainfall": np.random.randint(500, 1500, 50),
+    "yield": np.random.randint(2000, 5000, 50),
+    "crop": np.random.choice(crops, 50)
+})
+
+# Soil quality heatmap
+soil_quality = pd.DataFrame({
+    "region": regions,
+    "fertility": np.random.uniform(0.6, 1.0, len(regions)),
+    "pH": np.random.uniform(5.5, 7.5, len(regions)),
+    "organic_matter": np.random.uniform(2.0, 5.0, len(regions))
+})
+
+# Crop distribution
+crop_distribution = pd.DataFrame({
+    "crop": crops,
+    "share": [25, 30, 20, 25]
+})
+
+# Yield variability
+yield_variability = pd.DataFrame({
+    "crop": np.random.choice(crops, 100),
+    "yield": np.random.randint(2000, 5000, 100)
+})
+
+# Regional farming productivity (map data)
+region_map = pd.DataFrame({
+    "region": regions,
+    "lat": [28.6, 12.9, 22.5, 26.8],
+    "lon": [77.2, 77.6, 88.3, 80.9],
+    "productivity": np.random.randint(3000, 6000, len(regions))
+})
+
+# -----------------------------
+# Step 2: Initialize Dash App
+# -----------------------------
+app = dash.Dash(__name__)
+app.title = "Agriculture & Crop Yield Dashboard"
+
+# -----------------------------
+# Step 3: Layout with Tabs
+# -----------------------------
+app.layout = html.Div([
+    html.H1("🌾 Agriculture & Crop Yield Dashboard", style={"textAlign": "center"}),
+
+    dcc.Tabs([
+        dcc.Tab(label="Crop Yields", children=[
+            dcc.Dropdown(
+                id="crop-filter",
+                options=[{"label": c, "value": c} for c in crops],
+                value="Wheat",
+                clearable=False
+            ),
+            dcc.Graph(id="yield-line"),
+            dcc.Graph(id="yield-boxplot"),
+        ]),
+        dcc.Tab(label="Soil & Rainfall", children=[
+            dcc.Graph(id="rainfall-scatter"),
+            dcc.Graph(id="soil-heatmap"),
+        ]),
+        dcc.Tab(label="Regional Comparison", children=[
+            dcc.Graph(id="regional-bar"),
+            dcc.Graph(id="map-productivity"),
+        ]),
+        dcc.Tab(label="Sustainability Metrics", children=[
+            dcc.Graph(id="crop-pie"),
+        ])
+    ])
+])
+
+# -----------------------------
+# Step 4: Callbacks
+# -----------------------------
+
+@app.callback(Output("yield-line", "figure"), Input("crop-filter", "value"))
+def update_yield_line(crop):
+    df = yield_data[yield_data["crop"] == crop]
+    fig = px.line(df, x="year", y="yield", title=f"Yield Trend for {crop}")
+    return fig
+
+@app.callback(Output("yield-boxplot", "figure"), Input("crop-filter", "value"))
+def update_yield_boxplot(crop):
+    df = yield_variability[yield_variability["crop"] == crop]
+    fig = px.box(df, x="crop", y="yield", title=f"Yield Variability for {crop}")
+    return fig
+
+@app.callback(Output("rainfall-scatter", "figure"), Input("rainfall-scatter", "id"))
+def update_rainfall(_):
+    fig = px.scatter(rainfall_yield, x="rainfall", y="yield", color="crop",
+                     title="Rainfall vs Crop Yield")
+    return fig
+
+@app.callback(Output("soil-heatmap", "figure"), Input("soil-heatmap", "id"))
+def update_soil(_):
+    fig = px.imshow(soil_quality.drop("region", axis=1).T,
+                    labels=dict(x="Region", y="Soil Metric", color="Value"),
+                    x=soil_quality["region"],
+                    y=["fertility", "pH", "organic_matter"],
+                    title="Soil Quality Across Regions")
+    return fig
+
+@app.callback(Output("regional-bar", "figure"), Input("regional-bar", "id"))
+def update_regional_bar(_):
+    fig = px.bar(regional_yield, x="region", y="yield",
+                 title="Regional Yield Comparison")
+    return fig
+
+@app.callback(Output("map-productivity", "figure"), Input("map-productivity", "id"))
+def update_map(_):
+    fig = px.scatter_mapbox(region_map, lat="lat", lon="lon", size="productivity",
+                            color="region", hover_name="region",
+                            zoom=4, mapbox_style="carto-positron",
+                            title="Regional Farming Productivity")
+    return fig
+
+@app.callback(Output("crop-pie", "figure"), Input("crop-pie", "id"))
+def update_crop_pie(_):
+    fig = px.pie(crop_distribution, names="crop", values="share",
+                 title="Crop Distribution by Type")
+    return fig
+
+# -----------------------------
+# Step 5: Run App
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
