@@ -1,0 +1,83 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+np.random.seed(42)
+
+# Simulated stock prices for 3 companies over 100 days
+days = np.arange(100)
+stock_A = np.cumprod(1 + np.random.normal(0.001, 0.02, 100)) * 100
+stock_B = np.cumprod(1 + np.random.normal(0.0005, 0.015, 100)) * 80
+stock_C = np.cumprod(1 + np.random.normal(0.0012, 0.025, 100)) * 120
+
+stocks = {"Stock A": stock_A, "Stock B": stock_B, "Stock C": stock_C}
+
+# Calculate daily returns
+returns = {name: np.diff(prices)/prices[:-1] for name, prices in stocks.items()}
+
+# Calculate cumulative returns
+cum_returns = {name: np.cumprod(1 + r) for name, r in returns.items()}
+
+# Risk (std dev) and return (mean)
+risk_return = {name: (np.std(r), np.mean(r)) for name, r in returns.items()}
+
+# Correlation matrix
+returns_matrix = np.vstack(list(returns.values()))
+corr_matrix = np.corrcoef(returns_matrix)
+
+# Create dashboard with 2x3 subplots
+fig, axs = plt.subplots(2, 3, figsize=(18,10))
+
+# 1. Line chart: Stock prices
+for name, prices in stocks.items():
+    axs[0,0].plot(days, prices, label=name)
+axs[0,0].set_title("Stock Prices Over Time")
+axs[0,0].set_xlabel("Days")
+axs[0,0].set_ylabel("Price ($)")
+axs[0,0].legend()
+axs[0,0].grid(True, linestyle='--', alpha=0.7)
+
+# 2. Line chart: Cumulative returns
+for name, cr in cum_returns.items():
+    axs[0,1].plot(cr, label=name)
+axs[0,1].set_title("Cumulative Returns")
+axs[0,1].set_xlabel("Days")
+axs[0,1].set_ylabel("Growth Factor")
+axs[0,1].legend()
+axs[0,1].grid(True, linestyle='--', alpha=0.7)
+
+# 3. Histogram: Daily returns of Stock A
+axs[0,2].hist(returns["Stock A"], bins=20, color="skyblue", edgecolor="black")
+axs[0,2].set_title("Distribution of Daily Returns (Stock A)")
+axs[0,2].set_xlabel("Return")
+axs[0,2].set_ylabel("Frequency")
+axs[0,2].grid(axis='y', linestyle='--', alpha=0.7)
+
+# 4. Box plot: Volatility comparison
+axs[1,0].boxplot(list(returns.values()), tick_labels=list(returns.keys()))
+axs[1,0].set_title("Volatility Comparison Across Stocks")
+axs[1,0].set_ylabel("Daily Returns")
+
+# 5. Scatter plot: Risk vs Return
+for name, (risk, ret) in risk_return.items():
+    axs[1,1].scatter(risk, ret, s=100, label=name)
+axs[1,1].set_title("Risk vs Return")
+axs[1,1].set_xlabel("Risk (Std Dev)")
+axs[1,1].set_ylabel("Return (Mean)")
+axs[1,1].legend()
+axs[1,1].grid(True, linestyle='--', alpha=0.7)
+
+# 6. Heatmap: Correlation matrix
+im = axs[1,2].imshow(corr_matrix, cmap="coolwarm", vmin=-1, vmax=1)
+axs[1,2].set_title("Correlation Matrix of Returns")
+axs[1,2].set_xticks(range(len(stocks)))
+axs[1,2].set_yticks(range(len(stocks)))
+axs[1,2].set_xticklabels(list(stocks.keys()))
+axs[1,2].set_yticklabels(list(stocks.keys()))
+plt.colorbar(im, ax=axs[1,2])
+
+# Adjust layout
+plt.tight_layout()
+plt.suptitle("Financial Portfolio Risk & Performance Dashboard", fontsize=18, y=1.05)
+
+# Show dashboard
+plt.show()
