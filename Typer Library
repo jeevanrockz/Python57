@@ -1,0 +1,347 @@
+🎯 Why Typer Is Used
+- Less boilerplate than argparse or Click.
+- Type hints make arguments self‑documenting and validated.
+- Automatic help and autocompletion improve usability.
+- Scales easily from small scripts to large CLI apps.
+- Developer‑friendly with better editor support and fewer bugs.
+
+---------------
+greeting:-
+
+python app.py Jeevan
+
+import typer
+
+def greet(name: str):
+    typer.echo(f"Hello {name}")
+
+if __name__ == "__main__":
+    typer.run(greet)
+-------------
+addition:-
+
+python app.py math add 5 10
+
+import typer
+
+app = typer.Typer()
+math_app = typer.Typer()
+
+@math_app.command()
+def add(x: int, y: int):
+    typer.echo(x + y)
+
+app.add_typer(math_app, name="math")
+
+if __name__ == "__main__":
+    app()
+----------------
+multiple commands:-
+
+python app.py greet Jeevan
+python app.py bye Jeevan
+
+import typer
+
+app = typer.Typer()
+
+@app.command()
+def greet(name: str):
+    typer.echo(f"Hello {name}")
+
+@app.command()
+def bye(name: str):
+    typer.echo(f"Goodbye {name}")
+
+if __name__ == "__main__":
+    app()
+---------------------------------
+task manager cli:-
+
+python task_manager.py add "Learn Typer"
+python task_manager.py list
+python task_manager.py complete 1
+python task_manager.py --help
+
+
+import typer
+from typing import List
+from loguru import logger
+
+app = typer.Typer()
+
+# In-memory task list
+tasks: List[str] = []
+
+@app.command()
+def add(task: str):
+    """
+    Add a new task to the list.
+    """
+    tasks.append(task)
+    logger.info(f"Task added: {task}")
+    typer.echo(f"✅ Added task: {task}")
+
+@app.command()
+def list():
+    """
+    List all tasks.
+    """
+    if not tasks:
+        typer.echo("No tasks found.")
+        return
+    typer.echo("📋 Your tasks:")
+    for i, task in enumerate(tasks, start=1):
+        typer.echo(f"{i}. {task}")
+
+@app.command()
+def complete(task_number: int):
+    """
+    Mark a task as completed by its number.
+    """
+    if 0 < task_number <= len(tasks):
+        task = tasks.pop(task_number - 1)
+        logger.info(f"Task completed: {task}")
+        typer.echo(f"✅ Completed task: {task}")
+    else:
+        typer.echo("❌ Invalid task number.")
+
+if __name__ == "__main__":
+    app()
+---------------------------
+weather cli:-
+
+python weather.py current Vijayawada
+python weather.py forecast Vijayawada --days 5
+
+
+import typer
+from loguru import logger
+import random
+
+app = typer.Typer()
+
+# Fake weather data generator
+def generate_weather(city: str):
+    conditions = ["Sunny", "Cloudy", "Rainy", "Stormy", "Windy"]
+    temperature = random.randint(20, 40)
+    condition = random.choice(conditions)
+    return f"Weather in {city}: {condition}, {temperature}°C"
+
+@app.command()
+def current(city: str):
+    """
+    Show the current weather for a city.
+    """
+    report = generate_weather(city)
+    logger.info(f"Checked current weather for {city}")
+    typer.echo(report)
+
+@app.command()
+def forecast(city: str, days: int = 3):
+    """
+    Show a forecast for the next N days.
+    """
+    typer.echo(f"Forecast for {city}:")
+    for day in range(1, days + 1):
+        report = generate_weather(city)
+        logger.info(f"Forecast day {day} for {city}")
+        typer.echo(f"Day {day}: {report}")
+
+if __name__ == "__main__":
+    app()
+-------------------------------
+password manager cli:-
+
+without password: python password_manager.py add gmail jeevan
+with password: python password_manager.py add gmail jeevan --password mySecret123
+python password_manager.py list
+python password_manager.py get gmail
+python password_manager.py delete gmail
+
+import typer
+import json
+import os
+from pathlib import Path
+from loguru import logger
+import secrets
+import string
+
+app = typer.Typer()
+
+DATA_FILE = Path("passwords.json")
+
+# Ensure file exists
+if not DATA_FILE.exists():
+    with open(DATA_FILE, "w") as f:
+        json.dump({}, f)
+
+def load_data():
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+@app.command()
+def add(service: str, username: str, password: str = typer.Option(None, help="Provide a password or generate one")):
+    """
+    Add a new password entry for a service.
+    """
+    data = load_data()
+    if not password:
+        # Generate a secure random password
+        alphabet = string.ascii_letters + string.digits + string.punctuation
+        password = ''.join(secrets.choice(alphabet) for _ in range(16))
+        typer.echo("🔑 Generated secure password.")
+
+    data[service] = {"username": username, "password": password}
+    save_data(data)
+    logger.info(f"Added password for {service}")
+    typer.echo(f"✅ Password saved for {service}")
+
+@app.command()
+def list():
+    """
+    List all saved services.
+    """
+    data = load_data()
+    if not data:
+        typer.echo("No passwords stored yet.")
+        return
+    typer.echo("📂 Stored services:")
+    for service in data.keys():
+        typer.echo(f"- {service}")
+
+@app.command()
+def get(service: str):
+    """
+    Retrieve the username and password for a service.
+    """
+    data = load_data()
+    if service in data:
+        entry = data[service]
+        logger.info(f"Retrieved password for {service}")
+        typer.echo(f"Service: {service}")
+        typer.echo(f"Username: {entry['username']}")
+        typer.echo(f"Password: {entry['password']}")
+    else:
+        typer.echo("❌ Service not found.")
+
+@app.command()
+def delete(service: str):
+    """
+    Delete a stored password entry.
+    """
+    data = load_data()
+    if service in data:
+        del data[service]
+        save_data(data)
+        logger.info(f"Deleted password for {service}")
+        typer.echo(f"🗑️ Deleted password for {service}")
+    else:
+        typer.echo("❌ Service not found.")
+
+if __name__ == "__main__":
+    app()
+-----------------------------
+Taking notes CLI:-
+
+python notes.py add "Shopping List" "Buy milk, eggs, bread"
+python notes.py list
+python notes.py search milk
+python notes.py view "Shopping List"
+python notes.py delete "Shopping List"
+
+import typer
+import json
+from pathlib import Path
+from loguru import logger
+from typing import Optional
+
+app = typer.Typer()
+
+DATA_FILE = Path("notes.json")
+
+# Ensure file exists
+if not DATA_FILE.exists():
+    with open(DATA_FILE, "w") as f:
+        json.dump([], f)
+
+def load_notes():
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_notes(notes):
+    with open(DATA_FILE, "w") as f:
+        json.dump(notes, f, indent=4)
+
+@app.command()
+def add(title: str, content: str):
+    """
+    Add a new note with a title and content.
+    """
+    notes = load_notes()
+    note = {"title": title, "content": content}
+    notes.append(note)
+    save_notes(notes)
+    logger.info(f"Added note: {title}")
+    typer.echo(f"✅ Note '{title}' added.")
+
+@app.command()
+def list():
+    """
+    List all notes.
+    """
+    notes = load_notes()
+    if not notes:
+        typer.echo("No notes found.")
+        return
+    typer.echo("📒 Your notes:")
+    for i, note in enumerate(notes, start=1):
+        typer.echo(f"{i}. {note['title']}")
+
+@app.command()
+def search(keyword: str):
+    """
+    Search notes by keyword in title or content.
+    """
+    notes = load_notes()
+    results = [note for note in notes if keyword.lower() in note["title"].lower() or keyword.lower() in note["content"].lower()]
+    if not results:
+        typer.echo("❌ No matching notes found.")
+        return
+    typer.echo(f"🔍 Found {len(results)} matching notes:")
+    for note in results:
+        typer.echo(f"- {note['title']}: {note['content']}")
+
+@app.command()
+def delete(title: str):
+    """
+    Delete a note by its title.
+    """
+    notes = load_notes()
+    filtered = [note for note in notes if note["title"].lower() != title.lower()]
+    if len(filtered) == len(notes):
+        typer.echo("❌ Note not found.")
+        return
+    save_notes(filtered)
+    logger.info(f"Deleted note: {title}")
+    typer.echo(f"🗑️ Note '{title}' deleted.")
+
+@app.command()
+def view(title: str):
+    """
+    View the content of a note by title.
+    """
+    notes = load_notes()
+    for note in notes:
+        if note["title"].lower() == title.lower():
+            typer.echo(f"📖 {note['title']}: {note['content']}")
+            return
+    typer.echo("❌ Note not found.")
+
+if __name__ == "__main__":
+    app()
+------------------------------
