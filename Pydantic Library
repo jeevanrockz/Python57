@@ -1,0 +1,272 @@
+Pydantic is a Python library used for data validation and parsing with type hints. 
+It ensures that inputs (like JSON, dicts, or API data) are automatically converted into the 
+correct types and validated, making your code safer and cleaner.
+
+Why Pydantic is used
+- Data validation → Automatically checks that inputs match the expected types and constraints.
+- Type conversion → Converts compatible types (e.g., "123" → 123) so you don’t have to write manual parsing code.
+- Error reporting → Gives clear, structured error messages when data is invalid.
+- Schema definition → Models act as contracts for your data, making your code self‑documenting.
+- Serialization → Easily convert models to dicts or JSON for APIs and storage.
+- Nested structures → Handles complex data (objects inside objects) cleanly.
+- Settings management → Reads environment variables and configs safely.
+⚙️ High‑level workflow
+- You define a model with type hints (BaseModel).
+- You pass raw data (dict, JSON, etc.) into the model.
+- Pydantic validates and converts the data.
+- You use the clean, safe Python object in your app.
+- If data is invalid, you get a clear error instead of silent bugs.
+🧠 What you gain
+- Less boilerplate code (no manual validation).
+- Safer applications (bad data is caught early).
+- Cleaner, more maintainable code (models double as documentation).
+- Confidence when working with external inputs.
+
+
+-----------------------------------------
+student management system:-
+
+from pydantic import BaseModel, Field, field_validator
+from typing import List
+
+# Nested model for Address
+class Address(BaseModel):
+    city: str
+    zip: str = Field(min_length=5, max_length=6, description="Zip code must be 5-6 digits")
+
+# Main model for Student
+class Student(BaseModel):
+    id: int
+    name: str = Field(min_length=3, description="Name must be at least 3 characters")
+    age: int = Field(gt=0, lt=120, description="Age must be realistic")
+    subjects: List[str]
+    address: Address
+
+    # Custom validator for subjects
+    @field_validator("subjects")
+    def check_subjects(cls, v):
+        if len(v) == 0:
+            raise ValueError("Student must have at least one subject")
+        return v
+
+# Example usage
+try:
+    student = Student(
+        id="101",  # string will be converted to int
+        name="Jeevan",
+        age=20,
+        subjects=["Math", "Science"],
+        address={"city": "Vijayawada", "zip": "520001"}
+    )
+    print(student)
+    print(student.model_dump())       # ✅ replaces dict()
+    print(student.model_dump_json())  # ✅ replaces json()
+except Exception as e:
+    print("Validation Error:", e)
+-----------------------------------------------
+book library manager:-
+
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+from typing import Optional, Union, List
+from pydantic_settings import BaseSettings  # ✅ Correct import for settings
+
+# Settings management (reads from environment variables too)
+class Settings(BaseSettings):
+    library_name: str = "My Library"
+    debug: bool = False
+
+settings = Settings()
+
+# Book model
+class Book(BaseModel):
+    # Aliases: external name "book_id" maps to internal "id"
+    id: int = Field(alias="book_id")
+    title: str
+    author: str
+    pages: int = Field(gt=0, description="Pages must be positive")
+    rating: Optional[float] = None  # Optional field
+    genre: Union[str, List[str]]    # Union type: can be a single genre or list of genres
+
+    model_config = ConfigDict(strict=True)  # Strict mode: no auto-conversion
+
+    # Custom validator for rating
+    @field_validator("rating")
+    def check_rating(cls, v):
+        if v is not None and not (0 <= v <= 5):
+            raise ValueError("Rating must be between 0 and 5")
+        return v
+
+    # Computed field: summary
+    @computed_field
+    @property
+    def summary(self) -> str:
+        return f"{self.title} by {self.author} ({self.pages} pages)"
+
+# Example usage
+try:
+    book = Book(
+        book_id=101,  # alias used here
+        title="Python Mastery",
+        author="Jeevan",
+        pages=350,
+        rating=4.5,
+        genre=["Programming", "Education"]
+    )
+
+    print(f"Library: {settings.library_name}")
+    print(book.summary)             # Computed field
+    print(book.model_dump())        # Serialization
+    print(book.model_dump_json())   # JSON serialization
+
+except Exception as e:
+    print("Validation Error:", e)
+--------------------------------------
+movie review manager:-
+
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+from typing import Optional, Union, List
+
+class Review(BaseModel):
+    reviewer: str
+    rating: Optional[float] = Field(default=None, ge=0, le=5, description="Rating must be between 0 and 5")
+    comment: Optional[str] = None
+
+class Movie(BaseModel):
+    id: int
+    title: str
+    director: str
+    year: int = Field(ge=1900, le=2026, description="Year must be realistic")
+    genres: Union[str, List[str]]  # Can be a single genre or multiple
+    reviews: List[Review] = []
+
+    model_config = ConfigDict(strict=True)  # Strict mode: no auto-conversion
+
+    # Validator: ensure at least one genre
+    @field_validator("genres")
+    def check_genres(cls, v):
+        if isinstance(v, list) and len(v) == 0:
+            raise ValueError("Movie must have at least one genre")
+        return v
+
+    # Computed field: average rating
+    @computed_field
+    @property
+    def average_rating(self) -> Optional[float]:
+        if not self.reviews:
+            return None
+        return round(sum(r.rating for r in self.reviews if r.rating is not None) / len(self.reviews), 2)
+
+# Example usage
+try:
+    movie = Movie(
+        id=1,
+        title="Python Adventures",
+        director="Jeevan",
+        year=2025,
+        genres=["Education", "Adventure"],
+        reviews=[
+            {"reviewer": "Alice", "rating": 4.5, "comment": "Great movie!"},
+            {"reviewer": "Bob", "rating": 5.0, "comment": "Loved it!"}
+        ]
+    )
+
+    print(movie)
+    print("Average Rating:", movie.average_rating)
+    print(movie.model_dump_json())  # Clean JSON output
+
+except Exception as e:
+    print("Validation Error:", e)
+
+----------------------------------------
+weather data validator:-
+
+import requests
+from pydantic import BaseModel, Field, ValidationError
+from typing import Optional
+
+# Define schema for weather data
+class Weather(BaseModel):
+    city: str
+    temperature: float = Field(gt=-100, lt=100, description="Temperature must be realistic")
+    condition: str
+    humidity: Optional[int] = Field(default=None, ge=0, le=100)
+
+# Simulated API call (replace with a real API like OpenWeatherMap)
+def fetch_weather(city: str):
+    # Fake response (in real case: requests.get(...).json())
+    response = {
+        "city": city,
+        "temperature": "32.5",   # string, will be converted to float
+        "condition": "Sunny",
+        "humidity": 70
+    }
+    return response
+
+# Usage
+try:
+    raw_data = fetch_weather("Vijayawada")
+    weather = Weather(**raw_data)  # Pydantic validates and converts
+    print(weather)
+    print(weather.model_dump_json())  # Clean JSON output
+except ValidationError as e:
+    print("Validation Error:", e)
+--------------------------------------------------
+bank account manager:-
+
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+from typing import Optional, Union, List
+
+# Nested model for transactions
+class Transaction(BaseModel):
+    id: int
+    type: str = Field(pattern="^(deposit|withdrawal)$", description="Must be deposit or withdrawal")
+    amount: float = Field(gt=0, description="Amount must be positive")
+    note: Optional[str] = None
+
+class Account(BaseModel):
+    account_number: str
+    owner: str
+    balance: float = Field(ge=0, description="Balance cannot be negative")
+    transactions: List[Transaction] = []
+
+    model_config = ConfigDict(strict=True)  # Strict mode: no auto-conversion
+
+    # Validator: ensure account number format
+    @field_validator("account_number")
+    def check_account_number(cls, v):
+        if not v.isdigit() or len(v) != 10:
+            raise ValueError("Account number must be 10 digits")
+        return v
+
+    # Computed field: total deposits
+    @computed_field
+    @property
+    def total_deposits(self) -> float:
+        return sum(t.amount for t in self.transactions if t.type == "deposit")
+
+    # Computed field: total withdrawals
+    @computed_field
+    @property
+    def total_withdrawals(self) -> float:
+        return sum(t.amount for t in self.transactions if t.type == "withdrawal")
+
+# Example usage
+try:
+    account = Account(
+        account_number="1234567890",
+        owner="Jeevan",
+        balance=5000,
+        transactions=[
+            {"id": 1, "type": "deposit", "amount": 2000, "note": "Salary"},
+            {"id": 2, "type": "withdrawal", "amount": 500, "note": "Groceries"}
+        ]
+    )
+
+    print(account)
+    print("Total Deposits:", account.total_deposits)
+    print("Total Withdrawals:", account.total_withdrawals)
+    print(account.model_dump_json())  # Clean JSON output
+
+except Exception as e:
+    print("Validation Error:", e)
+-------------------------------------------------------------
