@@ -1,0 +1,173 @@
+⚡ Why Use Loguru?
+- Zero configuration → You can start logging immediately with logger.info("message").
+- Beautiful formatting → Logs are colorized and structured for readability.
+- Rotation & Retention → Automatically split logs into files and clean up old ones.
+- Serialization → Export logs as JSON for integration with monitoring tools.
+- Exception handling → Catch and log uncaught exceptions with full tracebacks.
+
+------------------------
+Logging with loguru:-
+
+from loguru import logger
+
+# Simple log
+logger.info("Starting the application...")
+
+# Different levels
+logger.debug("Debugging details")
+logger.warning("This is a warning")
+logger.error("An error occurred")
+
+# Logging to a file with rotation
+logger.add("app.log", rotation="1 MB", retention="7 days")
+logger.info("This will also be written to app.log")
+----------------------
+exception handling by loguru:-
+
+from loguru import logger
+
+def divide(a, b):
+    return a / b
+
+try:
+    divide(10, 0)
+except Exception as e:
+    logger.exception("An error occurred")
+------------------------
+file logging with rotation and retention:-
+
+from loguru import logger
+
+# Log to a file, rotate when file reaches 1 MB, keep logs for 7 days
+logger.add("app.log", rotation="1 MB", retention="7 days")
+
+for i in range(10000):
+    logger.info(f"Processing item {i}")
+--------------------------
+json logs:-
+
+from loguru import logger
+import sys
+
+logger.add(sys.stdout, serialize=True)
+
+logger.info("User logged in", user="Jeevan", action="login")
+--------------------------
+integrating with flask:-
+
+from flask import Flask
+from loguru import logger
+
+app = Flask(__name__)
+
+# Configure Loguru to log to both console and file
+logger.add("server.log", rotation="500 KB", retention="10 days")
+
+@app.route("/")
+def home():
+    logger.info("Home route accessed")
+    return "Welcome to the Flask app!"
+
+@app.route("/error")
+def error_route():
+    try:
+        1 / 0
+    except Exception:
+        logger.exception("Error occurred in /error route")
+    return "Error handled gracefully"
+
+if __name__ == "__main__":
+    logger.info("Starting Flask server...")
+    app.run(debug=True)
+--------------------------------
+contextual logging:-
+
+from loguru import logger
+
+logger.bind(user="Jeevan", action="login").info("User performed an action")
+------------------
+filtering logs:-
+
+from loguru import logger
+
+def filter_logs(record):
+    return "database" in record["message"]
+
+logger.add("db.log", filter=filter_logs)
+logger.info("database connected")   # Will be logged
+logger.info("user logged in")       # Will be ignored
+------------------
+from flask import Flask
+from loguru import logger
+
+# -------------------------
+# Setup Loguru
+# -------------------------
+# General log file with rotation and retention
+logger.add("ecommerce.log", rotation="1 MB", retention="7 days")
+
+# Separate logs for payments and orders using filters
+logger.add("payments.log", filter=lambda record: "PAYMENT" in record["message"])
+logger.add("orders.log", filter=lambda record: "ORDER" in record["message"])
+
+# -------------------------
+# Flask App
+# -------------------------
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    logger.info("Home route accessed")
+    return "Welcome to the Flask app!"
+
+@app.route("/error")
+def error_route():
+    try:
+        1 / 0
+    except Exception:
+        logger.exception("Error occurred in /error route")
+    return "Error handled gracefully"
+
+# -------------------------
+# Users Module
+# -------------------------
+def register_user(user_id, name):
+    logger.bind(user=user_id).info(f"USER Registered: {name}")
+    return {"user_id": user_id, "name": name}
+
+def login_user(user_id):
+    logger.bind(user=user_id).info("USER Login successful")
+    return True
+
+# -------------------------
+# Orders Module
+# -------------------------
+def place_order(order_id, user_id, item):
+    logger.bind(user=user_id).info(f"ORDER Placed: {order_id} - {item}")
+    return {"order_id": order_id, "item": item}
+
+# -------------------------
+# Payments Module
+# -------------------------
+@logger.catch
+def process_payment(order_id, amount):
+    if amount <= 0:
+        raise ValueError("Invalid payment amount")
+    logger.info(f"PAYMENT Processed: Order {order_id}, Amount {amount}")
+    return True
+
+# -------------------------
+# Main Application
+# -------------------------
+if __name__ == "__main__":
+    # Simulate workflow
+    user = register_user(1, "Jeevan")
+    login_user(user["user_id"])
+    order = place_order(101, user["user_id"], "Laptop")
+    process_payment(order["order_id"], 50000)
+    process_payment(order["order_id"], 0)  # This will trigger an exception
+
+    # Start Flask server
+    logger.info("Starting Flask server...")
+    app.run(debug=True)
+------------------------------
